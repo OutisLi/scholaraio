@@ -263,8 +263,8 @@ This project supports multiple AI coding agents:
 | Codex (OpenAI) | `AGENTS.md` (this file) | `.agents/skills/` → `.claude/skills/` |
 | OpenClaw | `AGENTS.md` (this file) | `.agents/skills/` → `.claude/skills/` |
 | Cursor | `.cursorrules` (wrapper → read this file) | — |
-| Windsurf | `.windsurfrules` (wrapper → read this file) | N/A |
-| GitHub Copilot | `.github/copilot-instructions.md` (wrapper → read this file) | N/A |
+| Windsurf | `.windsurfrules` (wrapper → read this file) | — |
+| GitHub Copilot | `.github/copilot-instructions.md` (wrapper → read this file) | — |
 | Cline | `.clinerules` (wrapper → read this file) | `.claude/skills/` (native) |
 
 Skills use the [AgentSkills.io](https://agentskills.io) open standard (`SKILL.md` format). The canonical location is `.claude/skills/`; `.agents/skills/` is a symlink for cross-agent discovery.
