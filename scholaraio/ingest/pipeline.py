@@ -1080,7 +1080,7 @@ def batch_convert_pdfs(
                 converted_dirs.append(pdir)
                 stats["converted"] += 1
 
-    ui(f"批量转换完成: {stats['converted']}/{len(to_convert)}")
+    ui(f"批量转换完成: {stats['converted']} 成功 / {stats['failed']} 失败 / {stats['skipped']} 跳过")
 
     # Post-processing: abstract backfill + optional enrich (toc + l3)
     if converted_dirs:

@@ -380,7 +380,7 @@ def _build_config(data: dict, root: Path) -> Config:
         mineru_api_key=ingest_data.get("mineru_api_key") or "",
         abstract_llm_mode=ingest_data.get("abstract_llm_mode", "verify"),
         contact_email=ingest_data.get("contact_email") or "",
-        mineru_batch_size=int(ingest_data.get("mineru_batch_size", 20)),
+        mineru_batch_size=int(ingest_data.get("mineru_batch_size") or 20),
     )
 
     embed_data = data.get("embed", {}) or {}
