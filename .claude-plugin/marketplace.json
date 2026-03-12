@@ -1,0 +1,34 @@
+{
+  "name": "scholaraio-marketplace",
+  "owner": {
+    "name": "ZimoLiao"
+  },
+  "metadata": {
+    "description": "ScholarAIO — Academic research terminal for Claude Code. Literature search, reading, analysis, topic modeling, citation graphs, and scholarly writing.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "scholaraio",
+      "source": "./",
+      "description": "Full ScholarAIO skill suite (22 skills): literature search, paper reading, ingestion, topic modeling, citation graphs, workspace management, academic writing, and more.",
+      "version": "1.0.0",
+      "author": {
+        "name": "ZimoLiao"
+      },
+      "keywords": [
+        "academic",
+        "research",
+        "literature-review",
+        "citation",
+        "paper",
+        "scholarly-writing",
+        "knowledge-base",
+        "semantic-search",
+        "topic-modeling",
+        "bibtex"
+      ],
+      "category": "research"
+    }
+  ]
+}

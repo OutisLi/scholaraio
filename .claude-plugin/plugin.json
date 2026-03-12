@@ -1,0 +1,23 @@
+{
+  "name": "scholaraio",
+  "description": "Academic research terminal powered by Claude Code — literature search, reading, analysis, topic modeling, citation graphs, and scholarly writing. 22 skills covering the full research workflow.",
+  "version": "1.0.0",
+  "author": {
+    "name": "ZimoLiao"
+  },
+  "repository": "https://github.com/ZimoLiao/scholaraio",
+  "license": "MIT",
+  "keywords": [
+    "academic",
+    "research",
+    "literature-review",
+    "citation",
+    "paper",
+    "scholarly-writing",
+    "knowledge-base",
+    "semantic-search",
+    "topic-modeling",
+    "bibtex"
+  ],
+  "category": "research"
+}
