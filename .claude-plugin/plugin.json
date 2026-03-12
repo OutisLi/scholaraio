@@ -1,0 +1,25 @@
+{
+  "name": "scholaraio",
+  "description": "Academic research terminal for Claude Code — search, read, and analyze papers from your local knowledge base while coding. 22 skills: literature search (keyword/semantic/fusion), paper reading (L1-L4), ingestion pipeline, topic modeling, citation graphs, workspace management, BibTeX export, academic writing assistance, and more. Requires Python 3.10+ and pip install.",
+  "version": "1.0.0",
+  "author": {
+    "name": "ZimoLiao",
+    "email": "zimoliao@mail.ustc.edu.cn"
+  },
+  "homepage": "https://github.com/ZimoLiao/scholaraio",
+  "repository": "https://github.com/ZimoLiao/scholaraio",
+  "license": "MIT",
+  "keywords": [
+    "academic",
+    "research",
+    "literature-review",
+    "citation",
+    "paper",
+    "scholarly-writing",
+    "knowledge-base",
+    "semantic-search",
+    "topic-modeling",
+    "bibtex"
+  ],
+  "category": "research"
+}
