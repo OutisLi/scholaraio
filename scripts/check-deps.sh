@@ -6,6 +6,11 @@
 # It NEVER exits non-zero (must not block session startup).
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+if [ -z "$HOME" ]; then
+    exit 0
+fi
+
 GLOBAL_DIR="$HOME/.scholaraio"
 GLOBAL_CFG="$GLOBAL_DIR/config.yaml"
 
