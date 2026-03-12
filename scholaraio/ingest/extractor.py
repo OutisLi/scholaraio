@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 class MetadataExtractor(Protocol):
     """元数据提取器协议，所有提取器必须实现此接口。"""
 
-    def extract(self, filepath: Path) -> "PaperMetadata":
+    def extract(self, filepath: Path) -> PaperMetadata:
         """从 Markdown 文件提取论文元数据。
 
         Args:
@@ -67,8 +67,9 @@ class RegexExtractor:
     速度最快，适用于 OCR 质量好的论文。
     """
 
-    def extract(self, filepath: Path) -> "PaperMetadata":
+    def extract(self, filepath: Path) -> PaperMetadata:
         from scholaraio.ingest.metadata import extract_metadata_from_markdown
+
         return extract_metadata_from_markdown(filepath)
 
 
@@ -118,11 +119,11 @@ class LLMExtractor:
         api_key: API 密钥，为空时从 ``llm_config.api_key`` 读取。
     """
 
-    def __init__(self, llm_config: "LLMConfig", api_key: str = ""):
+    def __init__(self, llm_config: LLMConfig, api_key: str = ""):
         self._config = llm_config
         self._api_key = api_key or llm_config.api_key
 
-    def extract(self, filepath: Path) -> "PaperMetadata":
+    def extract(self, filepath: Path) -> PaperMetadata:
         from scholaraio.ingest.metadata import (
             PaperMetadata,
             _extract_from_filename,
@@ -138,6 +139,7 @@ class LLMExtractor:
         except Exception as e:
             _log.debug("[LLM] extraction failed: %s, falling back to regex", e)
             from scholaraio.ingest.metadata import extract_metadata_from_markdown
+
             return extract_metadata_from_markdown(filepath)
 
         meta = PaperMetadata(source_file=filepath.name)
@@ -167,6 +169,7 @@ class LLMExtractor:
     def _call_api(self, header_text: str) -> str:
         """POST to OpenAI-compatible chat completions endpoint."""
         from scholaraio.metrics import call_llm
+
         result = call_llm(
             _EXTRACT_PROMPT.format(header=header_text),
             self._config,
@@ -195,12 +198,12 @@ class FallbackExtractor:
         RuntimeError: title 缺失且未配置 API key 时抛出。
     """
 
-    def __init__(self, llm_config: "LLMConfig", api_key: str):
+    def __init__(self, llm_config: LLMConfig, api_key: str):
         self._regex = RegexExtractor()
         self._llm_config = llm_config
         self._api_key = api_key
 
-    def extract(self, filepath: Path) -> "PaperMetadata":
+    def extract(self, filepath: Path) -> PaperMetadata:
         meta = self._regex.extract(filepath)
 
         needs_llm = not meta.title or (not meta.first_author and not meta.year)
@@ -281,12 +284,12 @@ class RobustExtractor:
         api_key: API 密钥。
     """
 
-    def __init__(self, llm_config: "LLMConfig", api_key: str):
+    def __init__(self, llm_config: LLMConfig, api_key: str):
         self._regex = RegexExtractor()
         self._llm_config = llm_config
         self._api_key = api_key
 
-    def extract(self, filepath: Path) -> "PaperMetadata":
+    def extract(self, filepath: Path) -> PaperMetadata:
         from scholaraio.ingest.metadata import (
             PaperMetadata,
             _extract_from_filename,
@@ -298,7 +301,7 @@ class RobustExtractor:
 
         # Step 2: scan full text for distinct DOIs (detect multi-paper PDFs)
         text = filepath.read_text(encoding="utf-8", errors="replace")
-        all_dois = set(re.findall(r'10\.\d{4,}/[^\s)]+', text))
+        all_dois = set(re.findall(r"10\.\d{4,}/[^\s)]+", text))
         multi_doi = len(all_dois) > 1
 
         # Step 3: LLM with regex results + paper content (up to 50k chars)
@@ -328,8 +331,7 @@ class RobustExtractor:
         meta.year = (llm_year if isinstance(llm_year, int) else None) or regex_meta.year
         # DOI: multi-DOI or hallucination guard
         if multi_doi:
-            _log.debug("[robust] found %d different DOIs in fulltext, discarding for title search",
-                       len(all_dois))
+            _log.debug("[robust] found %d different DOIs in fulltext, discarding for title search", len(all_dois))
             meta.doi = ""
         else:
             llm_doi = _clean_llm_str(data.get("doi")) or ""
@@ -361,6 +363,7 @@ class RobustExtractor:
 
     def _call_api(self, prompt: str) -> str:
         from scholaraio.metrics import call_llm
+
         result = call_llm(
             prompt,
             self._llm_config,
@@ -375,7 +378,7 @@ class RobustExtractor:
 # ============================================================================
 
 
-def get_extractor(config: "Config") -> MetadataExtractor:
+def get_extractor(config: Config) -> MetadataExtractor:
     """根据配置返回对应的元数据提取器实例。
 
     Args:

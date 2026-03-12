@@ -28,7 +28,6 @@ from pathlib import Path
 
 import yaml
 
-
 # ============================================================================
 #  Config dataclasses
 # ============================================================================
@@ -42,6 +41,7 @@ class PathsConfig:
         papers_dir: 已入库论文目录（相对于项目根目录）。
         index_db: SQLite 索引数据库路径（相对于项目根目录）。
     """
+
     papers_dir: str = "data/papers"
     index_db: str = "data/index.db"
 
@@ -59,6 +59,7 @@ class LLMConfig:
         timeout_toc: enrich-toc 调用超时（秒），标题列表较长。
         timeout_clean: validate_and_clean 调用超时（秒），结论全文较长。
     """
+
     backend: str = "openai-compat"
     model: str = "deepseek-chat"
     base_url: str = "https://api.deepseek.com"
@@ -75,6 +76,7 @@ class SearchConfig:
     Attributes:
         top_k: ``scholaraio search`` 默认返回条数。
     """
+
     top_k: int = 20
 
 
@@ -89,6 +91,7 @@ class EmbedConfig:
         top_k: ``scholaraio vsearch`` 默认返回条数。
         source: 模型下载源，``"modelscope"`` | ``"huggingface"``。
     """
+
     model: str = "Qwen/Qwen3-Embedding-0.6B"
     cache_dir: str = "~/.cache/modelscope/hub/models"
     device: str = "auto"
@@ -105,6 +108,7 @@ class TopicsConfig:
         nr_topics: 目标主题数，``0`` 表示 ``"auto"``。
         model_dir: 主题模型保存目录（相对于项目根目录）。
     """
+
     min_topic_size: int = 5
     nr_topics: int = 0  # 0 means "auto"
     model_dir: str = "data/topic_model"
@@ -121,9 +125,10 @@ class LogConfig:
         backup_count: 轮转保留的旧日志文件数。
         metrics_db: 指标数据库路径（相对于项目根目录）。
     """
+
     level: str = "INFO"
     file: str = "data/scholaraio.log"
-    max_bytes: int = 10_000_000     # 10 MB
+    max_bytes: int = 10_000_000  # 10 MB
     backup_count: int = 3
     metrics_db: str = "data/metrics.db"
 
@@ -148,14 +153,15 @@ class IngestConfig:
             转换前自动拆分为多个短 PDF，转换后合并为单个 Markdown。
         mineru_batch_size: MinerU 云 API 每批提交文件数上限，默认 20。
     """
-    extractor: str = "robust"                 # regex | auto | llm | robust
+
+    extractor: str = "robust"  # regex | auto | llm | robust
     mineru_endpoint: str = "http://localhost:8000"
     mineru_cloud_url: str = "https://mineru.net/api/v4"
     mineru_api_key: str = ""
-    abstract_llm_mode: str = "verify"        # off | fallback | verify
+    abstract_llm_mode: str = "verify"  # off | fallback | verify
     contact_email: str = ""
-    chunk_page_limit: int = 100              # auto-split PDFs exceeding this page count
-    mineru_batch_size: int = 20              # cloud batch size per request
+    chunk_page_limit: int = 100  # auto-split PDFs exceeding this page count
+    mineru_batch_size: int = 20  # cloud batch size per request
 
 
 @dataclass
@@ -167,6 +173,7 @@ class ZoteroConfig:
         library_id: Zotero 用户/群组 library ID。
         library_type: Library 类型，``"user"`` 或 ``"group"``。
     """
+
     api_key: str = ""
     library_id: str = ""
     library_type: str = "user"
@@ -186,6 +193,7 @@ class Config:
         log: 日志与指标配置。
         zotero: Zotero 集成配置。
     """
+
     paths: PathsConfig = field(default_factory=PathsConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     ingest: IngestConfig = field(default_factory=IngestConfig)
@@ -435,4 +443,14 @@ def _build_config(data: dict, root: Path) -> Config:
         library_type=zotero_data.get("library_type", "user"),
     )
 
-    return Config(paths=paths, llm=llm, ingest=ingest, embed=embed, search=search, topics=topics, log=log, zotero=zotero, _root=root)
+    return Config(
+        paths=paths,
+        llm=llm,
+        ingest=ingest,
+        embed=embed,
+        search=search,
+        topics=topics,
+        log=log,
+        zotero=zotero,
+        _root=root,
+    )

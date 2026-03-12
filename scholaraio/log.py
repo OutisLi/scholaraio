@@ -14,7 +14,6 @@ import logging
 import logging.handlers
 import sys
 import uuid
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -29,7 +28,7 @@ _FILE_DATEFMT = "%Y-%m-%d %H:%M:%S"
 _CONSOLE_FMT = "%(message)s"
 
 
-def setup(cfg: "Config") -> str:
+def setup(cfg: Config) -> str:
     """初始化 root logger，返回本次会话的 session_id。
 
     Args:

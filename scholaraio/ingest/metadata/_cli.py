@@ -13,9 +13,9 @@ _log = logging.getLogger(__name__)
 
 from scholaraio.log import ui
 
-from ._models import PaperMetadata
-from ._extract import _extract_lastname
 from ._api import enrich_metadata
+from ._extract import _extract_lastname
+from ._models import PaperMetadata
 from ._writer import (
     generate_new_stem,
     metadata_to_dict,
@@ -54,6 +54,7 @@ def _process_one(
 ) -> tuple[bool, PaperMetadata]:
     """Process a single markdown file. Returns (success, metadata)."""
     from scholaraio.ingest.extractor import RegexExtractor
+
     extractor = extractor or RegexExtractor()
 
     _log.info("processing: %s", filepath.name)
@@ -81,7 +82,7 @@ def _process_one(
         meta.extraction_method = "local_only"
 
     # Step 3: Write JSON
-    json_path = filepath.with_suffix('.json')
+    json_path = filepath.with_suffix(".json")
     if not dry_run:
         write_metadata_json(meta, json_path)
         _log.info("wrote: %s", json_path.name)
@@ -129,17 +130,15 @@ def cmd_batch(args: argparse.Namespace) -> None:
     if args.force:
         targets = all_md
     else:
-        targets = [f for f in all_md if not f.with_suffix('.json').exists()]
+        targets = [f for f in all_md if not f.with_suffix(".json").exists()]
 
     if not targets:
-        _log.info("no unprocessed .md files in %s%s", dirpath,
-                  " (use --force to reprocess)" if all_md else "")
+        _log.info("no unprocessed .md files in %s%s", dirpath, " (use --force to reprocess)" if all_md else "")
         return
 
     total = len(targets)
     skipped = len(all_md) - total
-    _log.info("found %d file(s) to process%s", total,
-              f" ({skipped} skipped, already have .json)" if skipped else "")
+    _log.info("found %d file(s) to process%s", total, f" ({skipped} skipped, already have .json)" if skipped else "")
 
     succeeded = 0
     failed = 0
@@ -226,7 +225,7 @@ def cmd_fix(args: argparse.Namespace) -> None:
     ui(f"Final -> {meta.first_author_lastname} ({meta.year}) {meta.title[:60]}...")
 
     # Write JSON
-    json_path = filepath.with_suffix('.json')
+    json_path = filepath.with_suffix(".json")
     if not args.dry_run:
         write_metadata_json(meta, json_path)
         _log.info("wrote: %s", json_path.name)

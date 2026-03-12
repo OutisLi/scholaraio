@@ -13,8 +13,7 @@ build/
 .venv/
 .env
 
-# Tests & IDE
-tests/
+# Tests cache & IDE
 .pytest_cache/
 .vscode/
 

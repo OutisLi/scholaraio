@@ -25,16 +25,24 @@ _log = logging.getLogger(__name__)
 _MAX_TEXT_FOR_LLM = 60_000
 
 # document types that skip DOI warnings
-DOCUMENT_TYPES = frozenset({
-    "document", "technical-report", "lecture-notes", "standard",
-    "book-chapter", "manual", "white-paper", "presentation",
-    "meeting-notes",
-})
+DOCUMENT_TYPES = frozenset(
+    {
+        "document",
+        "technical-report",
+        "lecture-notes",
+        "standard",
+        "book-chapter",
+        "manual",
+        "white-paper",
+        "presentation",
+        "meeting-notes",
+    }
+)
 
 
 def extract_document_metadata(
     md_path: Path,
-    cfg: "Config",
+    cfg: Config,
     *,
     existing_meta: PaperMetadata | None = None,
 ) -> PaperMetadata:
@@ -84,9 +92,7 @@ def extract_document_metadata(
         return _fallback_document_metadata(md_path, meta)
 
     truncated = text[:_MAX_TEXT_FOR_LLM]
-    prompt = _build_prompt(truncated, has_title=has_title,
-                           has_abstract=has_abstract,
-                           existing_title=meta.title or "")
+    prompt = _build_prompt(truncated, has_title=has_title, has_abstract=has_abstract, existing_title=meta.title or "")
 
     try:
         from scholaraio.metrics import call_llm
@@ -124,9 +130,10 @@ def extract_document_metadata(
     return meta
 
 
-def _fallback_document_metadata(md_path: Path,
-                                meta: PaperMetadata | None = None,
-                                ) -> PaperMetadata:
+def _fallback_document_metadata(
+    md_path: Path,
+    meta: PaperMetadata | None = None,
+) -> PaperMetadata:
     """Minimal metadata extraction without LLM."""
     if meta is None:
         meta = PaperMetadata()
@@ -153,8 +160,7 @@ def _fallback_document_metadata(md_path: Path,
     return meta
 
 
-def _build_prompt(text: str, *, has_title: bool, has_abstract: bool,
-                  existing_title: str = "") -> str:
+def _build_prompt(text: str, *, has_title: bool, has_abstract: bool, existing_title: str = "") -> str:
     """Build LLM prompt for document metadata extraction."""
     tasks = []
     if not has_title:

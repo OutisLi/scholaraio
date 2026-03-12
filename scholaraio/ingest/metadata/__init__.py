@@ -18,10 +18,23 @@ metadata — 论文元数据提取、API 查询、JSON 输出与文件重命名
 # Re-export all public names so existing imports remain unchanged:
 #   from scholaraio.ingest.metadata import PaperMetadata, enrich_metadata, ...
 
-from ._models import PaperMetadata  # noqa: F401
-
+from ._abstract import (  # noqa: F401
+    _clean_abstract,
+    _regex_extract_abstract,
+    backfill_abstracts,
+    extract_abstract_from_md,
+    fetch_abstract_by_doi,
+)
+from ._api import (  # noqa: F401
+    _fuzzy_title_match,
+    _title_keywords,
+    enrich_metadata,
+    query_crossref,
+    query_openalex,
+    query_semantic_scholar,
+)
+from ._cli import main  # noqa: F401
 from ._extract import (  # noqa: F401
-    extract_metadata_from_markdown,
     _clean_author_name,
     _clean_author_text,
     _extract_authors,
@@ -34,25 +47,9 @@ from ._extract import (  # noqa: F401
     _extract_title,
     _extract_year_from_text,
     _split_authors,
+    extract_metadata_from_markdown,
 )
-
-from ._api import (  # noqa: F401
-    enrich_metadata,
-    query_crossref,
-    query_openalex,
-    query_semantic_scholar,
-    _fuzzy_title_match,
-    _title_keywords,
-)
-
-from ._abstract import (  # noqa: F401
-    _clean_abstract,
-    _regex_extract_abstract,
-    backfill_abstracts,
-    extract_abstract_from_md,
-    fetch_abstract_by_doi,
-)
-
+from ._models import PaperMetadata  # noqa: F401
 from ._writer import (  # noqa: F401
     _clean_title_for_filename,
     _sanitize_for_filename,
@@ -64,5 +61,3 @@ from ._writer import (  # noqa: F401
     rename_paper,
     write_metadata_json,
 )
-
-from ._cli import main  # noqa: F401

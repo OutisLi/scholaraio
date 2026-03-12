@@ -61,12 +61,15 @@ def _resolve_top(args: argparse.Namespace, default: int) -> int:
 
 
 def _add_filter_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--year", type=str, default=None,
-                        help="年份过滤：2023 / 2020-2024 / 2020-")
-    parser.add_argument("--journal", type=str, default=None,
-                        help="期刊名过滤（模糊匹配）")
-    parser.add_argument("--type", type=str, default=None, dest="paper_type",
-                        help="论文类型过滤：review / journal-article 等（模糊匹配）")
+    parser.add_argument("--year", type=str, default=None, help="年份过滤：2023 / 2020-2024 / 2020-")
+    parser.add_argument("--journal", type=str, default=None, help="期刊名过滤（模糊匹配）")
+    parser.add_argument(
+        "--type",
+        type=str,
+        default=None,
+        dest="paper_type",
+        help="论文类型过滤：review / journal-article 等（模糊匹配）",
+    )
 
 
 def _resolve_ws_paper_ids(args: argparse.Namespace, cfg) -> set[str] | None:
@@ -74,6 +77,7 @@ def _resolve_ws_paper_ids(args: argparse.Namespace, cfg) -> set[str] | None:
     if not ws_name:
         return None
     from scholaraio import workspace
+
     ws_dir = cfg._root / "workspace" / ws_name
     pids = workspace.read_paper_ids(ws_dir)
     if not pids:
@@ -135,8 +139,14 @@ def cmd_search_author(args: argparse.Namespace, cfg) -> None:
 
     query = " ".join(args.query)
     try:
-        results = search_author(query, cfg.index_db, top_k=_resolve_top(args, cfg.search.top_k),
-                                year=args.year, journal=args.journal, paper_type=args.paper_type)
+        results = search_author(
+            query,
+            cfg.index_db,
+            top_k=_resolve_top(args, cfg.search.top_k),
+            year=args.year,
+            journal=args.journal,
+            paper_type=args.paper_type,
+        )
     except FileNotFoundError as e:
         _log.error("%s", e)
         sys.exit(1)
@@ -155,8 +165,14 @@ def cmd_search(args: argparse.Namespace, cfg) -> None:
 
     query = " ".join(args.query)
     try:
-        results = search(query, cfg.index_db, top_k=_resolve_top(args, cfg.search.top_k),
-                         year=args.year, journal=args.journal, paper_type=args.paper_type)
+        results = search(
+            query,
+            cfg.index_db,
+            top_k=_resolve_top(args, cfg.search.top_k),
+            year=args.year,
+            journal=args.journal,
+            paper_type=args.paper_type,
+        )
     except FileNotFoundError as e:
         _log.error("%s", e)
         sys.exit(1)
@@ -235,8 +251,15 @@ def cmd_vsearch(args: argparse.Namespace, cfg) -> None:
 
     query = " ".join(args.query)
     try:
-        results = vsearch(query, cfg.index_db, top_k=_resolve_top(args, cfg.embed.top_k), cfg=cfg,
-                          year=args.year, journal=args.journal, paper_type=args.paper_type)
+        results = vsearch(
+            query,
+            cfg.index_db,
+            top_k=_resolve_top(args, cfg.embed.top_k),
+            cfg=cfg,
+            year=args.year,
+            journal=args.journal,
+            paper_type=args.paper_type,
+        )
     except FileNotFoundError as e:
         _log.error("%s", e)
         sys.exit(1)
@@ -256,10 +279,13 @@ def cmd_usearch(args: argparse.Namespace, cfg) -> None:
 
     query = " ".join(args.query)
     results = unified_search(
-        query, cfg.index_db,
+        query,
+        cfg.index_db,
         top_k=_resolve_top(args, cfg.search.top_k),
         cfg=cfg,
-        year=args.year, journal=args.journal, paper_type=args.paper_type,
+        year=args.year,
+        journal=args.journal,
+        paper_type=args.paper_type,
     )
 
     if not results:
@@ -291,11 +317,16 @@ def cmd_audit(args: argparse.Namespace, cfg) -> None:
 
 
 def cmd_repair(args: argparse.Namespace, cfg) -> None:
-    from scholaraio.ingest.metadata import (
-        PaperMetadata, enrich_metadata, write_metadata_json,
-        generate_new_stem, rename_files, _extract_lastname,
-    )
     import json
+
+    from scholaraio.ingest.metadata import (
+        PaperMetadata,
+        _extract_lastname,
+        enrich_metadata,
+        generate_new_stem,
+        rename_files,
+        write_metadata_json,
+    )
 
     papers_dir = cfg.papers_dir
     paper_id = args.paper_id
@@ -395,7 +426,9 @@ def cmd_enrich_toc(args: argparse.Namespace, cfg) -> None:
 
         ui(f"\n{json_path.parent.name}")
         success = enrich_toc(
-            json_path, md_path, cfg,
+            json_path,
+            md_path,
+            cfg,
             force=args.force,
             inspect=args.inspect,
         )
@@ -423,7 +456,7 @@ def cmd_pipeline(args: argparse.Namespace, cfg) -> None:
     # Resolve step list
     if args.preset:
         if args.preset not in PRESETS:
-            _log.error("Unknown preset '%s'. Available: %s", args.preset, ', '.join(PRESETS))
+            _log.error("Unknown preset '%s'. Available: %s", args.preset, ", ".join(PRESETS))
             sys.exit(1)
         step_names = PRESETS[args.preset]
     elif args.steps:
@@ -433,12 +466,12 @@ def cmd_pipeline(args: argparse.Namespace, cfg) -> None:
         sys.exit(1)
 
     opts = {
-        "dry_run":     args.dry_run,
-        "no_api":      args.no_api,
-        "force":       args.force,
-        "inspect":     args.inspect,
+        "dry_run": args.dry_run,
+        "no_api": args.no_api,
+        "force": args.force,
+        "inspect": args.inspect,
         "max_retries": args.max_retries,
-        "rebuild":     args.rebuild,
+        "rebuild": args.rebuild,
     }
     if args.inbox:
         opts["inbox_dir"] = Path(args.inbox).resolve()
@@ -492,8 +525,13 @@ def cmd_top_cited(args: argparse.Namespace, cfg) -> None:
     from scholaraio.index import top_cited
 
     try:
-        results = top_cited(cfg.index_db, top_k=_resolve_top(args, cfg.search.top_k),
-                            year=args.year, journal=args.journal, paper_type=args.paper_type)
+        results = top_cited(
+            cfg.index_db,
+            top_k=_resolve_top(args, cfg.search.top_k),
+            year=args.year,
+            journal=args.journal,
+            paper_type=args.paper_type,
+        )
     except FileNotFoundError as e:
         _log.error("%s", e)
         sys.exit(1)
@@ -690,6 +728,7 @@ def _write_all_viz(model, viz_dir: Path) -> None:
         visualize_topics_2d,
         visualize_topics_over_time,
     )
+
     viz_dir.mkdir(parents=True, exist_ok=True)
     _log.debug("generating visualizations")
 
@@ -759,6 +798,7 @@ def cmd_topics(args: argparse.Namespace, cfg) -> None:
     # Manual merge
     if args.merge:
         from scholaraio.topics import merge_topics_by_ids
+
         # Parse "1,6,14+3,5" → [[1,6,14],[3,5]]
         groups = []
         for group_str in args.merge.split("+"):
@@ -839,10 +879,8 @@ def cmd_backfill_abstract(args: argparse.Namespace, cfg) -> None:
     doi_fetch = getattr(args, "doi_fetch", False)
     source = "DOI official source" if doi_fetch else "local .md + LLM fallback"
     ui(f"{action} abstract ({source})...\n")
-    stats = backfill_abstracts(papers_dir, dry_run=args.dry_run,
-                               doi_fetch=doi_fetch, cfg=cfg)
-    parts = [f"{stats['filled']} filled", f"{stats['skipped']} skipped",
-             f"{stats['failed']} failed"]
+    stats = backfill_abstracts(papers_dir, dry_run=args.dry_run, doi_fetch=doi_fetch, cfg=cfg)
+    parts = [f"{stats['filled']} filled", f"{stats['skipped']} skipped", f"{stats['failed']} failed"]
     if stats.get("updated"):
         parts.insert(1, f"{stats['updated']} updated from official")
     ui(f"\nDone: {' | '.join(parts)}")
@@ -869,6 +907,7 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
                 ui("请提供 --name 或至少一个过滤条件")
                 return
         from scholaraio.explore import fetch_explore
+
         total = fetch_explore(
             name,
             issn=getattr(args, "issn", None),
@@ -909,14 +948,17 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
         if args.build or args.rebuild:
             nr_topics = args.nr_topics
             info = build_explore_topics(
-                args.name, rebuild=args.rebuild,
+                args.name,
+                rebuild=args.rebuild,
                 min_topic_size=args.min_topic_size or 30,
                 nr_topics=nr_topics,
                 cfg=cfg,
             )
-            ui(f"\nClustering done: {info['n_topics']} topics, "
-                  f"{info['n_outliers']} outliers, "
-                  f"{info['n_papers']} papers")
+            ui(
+                f"\nClustering done: {info['n_topics']} topics, "
+                f"{info['n_outliers']} outliers, "
+                f"{info['n_papers']} papers"
+            )
 
         try:
             model = load_model(model_dir)
@@ -947,6 +989,7 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
             ui("No valid topics. Run scholaraio explore topics --name <name> --build first.")
             return
         from scholaraio.topics import get_outliers
+
         outliers = get_outliers(model)
         total = sum(t["count"] for t in overview) + len(outliers)
         ui(f"\n{len(overview)} topics, {total} papers, {len(outliers)} outliers\n")
@@ -969,6 +1012,7 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
         top_k = _resolve_top(args, 10)
         if mode == "keyword":
             from scholaraio.explore import explore_search
+
             results = explore_search(args.name, query, top_k=top_k, cfg=cfg)
         elif mode == "unified":
             try:
@@ -1010,6 +1054,7 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
 
     elif action == "info":
         import json as _json
+
         if not args.name:
             # List all explore libraries
             explore_root = cfg._root / "data" / "explore"
@@ -1028,11 +1073,10 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
                         qinfo = f"ISSN {meta['issn']}"
                     else:
                         qinfo = "?"
-                    ui(f"  {d.name}: {meta.get('count', '?')} papers "
-                          f"({qinfo}, "
-                          f"fetched {meta.get('fetched_at', '?')})")
+                    ui(f"  {d.name}: {meta.get('count', '?')} papers ({qinfo}, fetched {meta.get('fetched_at', '?')})")
             return
         from scholaraio.explore import count_papers
+
         meta_file = cfg._root / "data" / "explore" / args.name / "meta.json"
         if meta_file.exists():
             meta = _json.loads(meta_file.read_text("utf-8"))
@@ -1180,17 +1224,21 @@ def cmd_ws(args: argparse.Namespace, cfg) -> None:
             return
         query = " ".join(args.query)
         from scholaraio.index import unified_search
+
         results = unified_search(
-            query, cfg.index_db,
+            query,
+            cfg.index_db,
             top_k=_resolve_top(args, cfg.search.top_k),
             cfg=cfg,
-            year=args.year, journal=args.journal, paper_type=args.paper_type,
+            year=args.year,
+            journal=args.journal,
+            paper_type=args.paper_type,
             paper_ids=pids,
         )
         if not results:
             ui(f'工作区 {args.name} 中未找到 "{query}" 的结果')
             return
-        ui(f'工作区 {args.name} 中找到 {len(results)} 篇:\n')
+        ui(f"工作区 {args.name} 中找到 {len(results)} 篇:\n")
         for i, r in enumerate(results, 1):
             _print_search_result(i, r, extra=f" [{r.get('match', '')}]")
 
@@ -1201,10 +1249,12 @@ def cmd_ws(args: argparse.Namespace, cfg) -> None:
             ui("工作区为空")
             return
         from scholaraio.export import export_bibtex
+
         bib = export_bibtex(
             cfg.papers_dir,
             paper_ids=list(dir_names),
-            year=args.year, journal=args.journal,
+            year=args.year,
+            journal=args.journal,
         )
         if not bib:
             ui("未找到匹配的论文")
@@ -1225,6 +1275,7 @@ def cmd_ws(args: argparse.Namespace, cfg) -> None:
 
 def cmd_metrics(args: argparse.Namespace, cfg) -> None:
     from scholaraio.metrics import get_store
+
     store = get_store()
     if not store:
         _log.error("Metrics database not initialized.")
@@ -1262,9 +1313,9 @@ def cmd_metrics(args: argparse.Namespace, cfg) -> None:
             dur = r["duration_s"] or 0
             total_in += t_in
             total_out += t_out
-            ui(f"{ts:<20s} {name:<24s} {t_in:>8,d} {t_out:>8,d} {t_in+t_out:>8,d} {dur:>6.1f}s {r['status']:<5s}")
+            ui(f"{ts:<20s} {name:<24s} {t_in:>8,d} {t_out:>8,d} {t_in + t_out:>8,d} {dur:>6.1f}s {r['status']:<5s}")
         ui("-" * 82)
-        ui(f"{'total':<20s} {'':<24s} {total_in:>8,d} {total_out:>8,d} {total_in+total_out:>8,d}")
+        ui(f"{'total':<20s} {'':<24s} {total_in:>8,d} {total_out:>8,d} {total_in + total_out:>8,d}")
     else:
         ui(f"{'time':<20s} {'name':<32s} {'time':>7s} {'status':<5s}")
         ui("-" * 66)
@@ -1276,7 +1327,7 @@ def cmd_metrics(args: argparse.Namespace, cfg) -> None:
 
 
 def cmd_setup(args: argparse.Namespace, cfg) -> None:
-    from scholaraio.setup import run_check, format_check_results, run_wizard
+    from scholaraio.setup import format_check_results, run_check, run_wizard
 
     action = getattr(args, "setup_action", None)
     if action == "check":
@@ -1289,6 +1340,7 @@ def cmd_setup(args: argparse.Namespace, cfg) -> None:
 
 def cmd_migrate_dirs(args: argparse.Namespace, cfg) -> None:
     from scholaraio.migrate import migrate_to_dirs
+
     dry_run = not args.execute
     stats = migrate_to_dirs(cfg.papers_dir, dry_run=dry_run)
     mode = "dry-run" if dry_run else "executed"
@@ -1325,7 +1377,8 @@ def cmd_import_endnote(args: argparse.Namespace, cfg) -> None:
         ui(f"解析到 {len(records)} 条记录")
 
     stats = import_external(
-        records, cfg,
+        records,
+        cfg,
         pdf_paths=pdf_paths,
         no_api=args.no_api,
         dry_run=args.dry_run,
@@ -1339,6 +1392,7 @@ def cmd_import_endnote(args: argparse.Namespace, cfg) -> None:
 def _batch_convert_pdfs(cfg, *, enrich: bool = False) -> None:
     """Convert all unprocessed PDFs in papers_dir to paper.md via MinerU."""
     from scholaraio.ingest.pipeline import batch_convert_pdfs
+
     batch_convert_pdfs(cfg, enrich=enrich)
 
 
@@ -1381,7 +1435,9 @@ def cmd_import_zotero(args: argparse.Namespace, cfg) -> None:
             ui("错误：需要 Zotero API key（--api-key 或 config.local.yaml zotero.api_key 或 ZOTERO_API_KEY 环境变量）")
             sys.exit(1)
         if not library_id:
-            ui("错误：需要 Zotero library ID（--library-id 或 config.local.yaml zotero.library_id 或 ZOTERO_LIBRARY_ID 环境变量）")
+            ui(
+                "错误：需要 Zotero library ID（--library-id 或 config.local.yaml zotero.library_id 或 ZOTERO_LIBRARY_ID 环境变量）"
+            )
             sys.exit(1)
 
         try:
@@ -1404,7 +1460,8 @@ def cmd_import_zotero(args: argparse.Namespace, cfg) -> None:
         pdf_dir = Path(tempfile.mkdtemp(prefix="scholaraio_zotero_")) if download_pdfs else None
 
         records, pdf_paths = fetch_zotero_api(
-            library_id, api_key,
+            library_id,
+            api_key,
             library_type=library_type,
             collection_key=args.collection,
             item_types=args.item_type,
@@ -1425,7 +1482,8 @@ def cmd_import_zotero(args: argparse.Namespace, cfg) -> None:
     from scholaraio.ingest.pipeline import import_external
 
     stats = import_external(
-        records, cfg,
+        records,
+        cfg,
         pdf_paths=pdf_paths,
         no_api=args.no_api,
         dry_run=args.dry_run,
@@ -1442,20 +1500,22 @@ def cmd_import_zotero(args: argparse.Namespace, cfg) -> None:
 
 def _import_zotero_collections_as_workspaces(args, cfg, api_key, library_id, library_type):
     """Create workspaces from Zotero collections after import."""
-    import json
 
     from scholaraio import workspace
     from scholaraio.papers import iter_paper_dirs
 
     if args.local:
         from scholaraio.sources.zotero import list_collections_local, parse_zotero_local
+
         collections = list_collections_local(Path(args.local))
     else:
         from scholaraio.sources.zotero import list_collections_api
+
         collections = list_collections_api(library_id, api_key, library_type=library_type)
 
     # Build DOI → UUID map from existing papers
     from scholaraio.papers import read_meta
+
     doi_to_uuid: dict[str, str] = {}
     for pdir in iter_paper_dirs(cfg.papers_dir):
         try:
@@ -1473,12 +1533,15 @@ def _import_zotero_collections_as_workspaces(args, cfg, api_key, library_id, lib
         # Get papers in this collection
         if args.local:
             coll_records, _ = parse_zotero_local(
-                Path(args.local), collection_key=coll["key"],
+                Path(args.local),
+                collection_key=coll["key"],
             )
         else:
             from scholaraio.sources.zotero import fetch_zotero_api
+
             coll_records, _ = fetch_zotero_api(
-                library_id, api_key,
+                library_id,
+                api_key,
                 library_type=library_type,
                 collection_key=coll["key"],
                 download_pdfs=False,
@@ -1499,7 +1562,6 @@ def _import_zotero_collections_as_workspaces(args, cfg, api_key, library_id, lib
 
 
 def cmd_attach_pdf(args: argparse.Namespace, cfg) -> None:
-    import json
     import shutil
 
     paper_d = _resolve_paper(args.paper_id, cfg)
@@ -1534,8 +1596,10 @@ def cmd_attach_pdf(args: argparse.Namespace, cfg) -> None:
             ui("错误：MinerU 不可达且无云 API key")
             sys.exit(1)
         from scholaraio.ingest.mineru import convert_pdf_cloud
+
         result = convert_pdf_cloud(
-            dest_pdf, mineru_opts,
+            dest_pdf,
+            mineru_opts,
             api_key=api_key,
             cloud_url=cfg.ingest.mineru_cloud_url,
         )
@@ -1570,9 +1634,11 @@ def cmd_attach_pdf(args: argparse.Namespace, cfg) -> None:
 
     # Backfill abstract if missing
     from scholaraio.papers import read_meta, write_meta
+
     data = read_meta(paper_d)
     if not data.get("abstract"):
         from scholaraio.ingest.metadata import extract_abstract_from_md
+
         abstract = extract_abstract_from_md(existing_md, cfg)
         if abstract:
             data["abstract"] = abstract
@@ -1581,6 +1647,7 @@ def cmd_attach_pdf(args: argparse.Namespace, cfg) -> None:
 
     # Incremental re-embed + re-index
     from scholaraio.ingest.pipeline import step_embed, step_index
+
     step_embed(cfg.papers_dir, cfg, {"dry_run": False, "rebuild": False})
     step_index(cfg.papers_dir, cfg, {"dry_run": False, "rebuild": False})
 
@@ -1602,7 +1669,6 @@ def _print_search_result(idx: int, r: dict, extra: str = "") -> None:
     ui(f"     {author_display} | {r.get('year', '?')} | {r.get('journal', '?')}{cite_suffix}")
     ui(f"     {r['title']}")
     ui()
-
 
 
 def _format_citations(cc: dict) -> str:
@@ -1635,6 +1701,7 @@ def _resolve_paper(paper_id: str, cfg) -> Path:
         return paper_d
     # 2. Registry lookup (fast, but may be stale)
     from scholaraio.index import lookup_paper
+
     reg = lookup_paper(cfg.index_db, paper_id)
     if reg:
         paper_d = papers_dir / reg["dir_name"]
@@ -1642,6 +1709,7 @@ def _resolve_paper(paper_id: str, cfg) -> Path:
             return paper_d
     # 3. Filesystem scan fallback (handles stale registry / pre-index state)
     from scholaraio.papers import read_meta as _read_meta
+
     for pdir in iter_paper_dirs(papers_dir):
         try:
             data = _read_meta(pdir)
@@ -1713,7 +1781,10 @@ def main() -> None:
     p_show.set_defaults(func=cmd_show)
     p_show.add_argument("paper_id", help="论文目录名（search 结果中显示）")
     p_show.add_argument(
-        "--layer", type=int, default=2, choices=[1, 2, 3, 4],
+        "--layer",
+        type=int,
+        default=2,
+        choices=[1, 2, 3, 4],
         help="加载层级：1=元数据, 2=摘要, 3=结论, 4=全文（默认 2）",
     )
 
@@ -1748,7 +1819,8 @@ def main() -> None:
     p_pipe = sub.add_parser("pipeline", help="组合步骤流水线（可任意组装）")
     p_pipe.set_defaults(func=cmd_pipeline)
     p_pipe.add_argument(
-        "preset", nargs="?",
+        "preset",
+        nargs="?",
         help="预设名称：full | ingest | enrich | reindex",
     )
     p_pipe.add_argument("--steps", help="自定义步骤序列（逗号分隔），如 toc,l3,index")
@@ -1800,17 +1872,14 @@ def main() -> None:
     p_topics.set_defaults(func=cmd_topics)
     p_topics.add_argument("--build", action="store_true", help="构建主题模型（增量）")
     p_topics.add_argument("--rebuild", action="store_true", help="清空后重建主题模型")
-    p_topics.add_argument("--reduce", type=int, default=None, metavar="N",
-                          help="快速合并主题到 N 个（不重新聚类）")
-    p_topics.add_argument("--merge", type=str, default=None, metavar="IDS",
-                          help="手动合并主题，格式: 1,6,14+3,5（用+分隔组）")
-    p_topics.add_argument("--topic", type=int, default=None, metavar="ID",
-                          help="查看指定主题的论文（-1 查看 outlier）")
+    p_topics.add_argument("--reduce", type=int, default=None, metavar="N", help="快速合并主题到 N 个（不重新聚类）")
+    p_topics.add_argument(
+        "--merge", type=str, default=None, metavar="IDS", help="手动合并主题，格式: 1,6,14+3,5（用+分隔组）"
+    )
+    p_topics.add_argument("--topic", type=int, default=None, metavar="ID", help="查看指定主题的论文（-1 查看 outlier）")
     p_topics.add_argument("--top", type=int, default=None, help="返回条数")
-    p_topics.add_argument("--min-topic-size", type=int, default=None,
-                          help="最小聚类大小（覆盖 config）")
-    p_topics.add_argument("--nr-topics", type=int, default=None,
-                          help="目标主题数（覆盖 config，0=auto, -1=不合并）")
+    p_topics.add_argument("--min-topic-size", type=int, default=None, help="最小聚类大小（覆盖 config）")
+    p_topics.add_argument("--nr-topics", type=int, default=None, help="目标主题数（覆盖 config，0=auto, -1=不合并）")
     p_topics.add_argument("--viz", action="store_true", help="生成 HTML 可视化图表（6 张）")
 
     # --- backfill-abstract ---
@@ -1829,8 +1898,7 @@ def main() -> None:
     # --- audit ---
     p_audit = sub.add_parser("audit", help="审计已入库论文的数据质量")
     p_audit.set_defaults(func=cmd_audit)
-    p_audit.add_argument("--severity", choices=["error", "warning", "info"],
-                         help="只显示指定严重级别的问题")
+    p_audit.add_argument("--severity", choices=["error", "warning", "info"], help="只显示指定严重级别的问题")
 
     # --- repair ---
     p_repair = sub.add_parser("repair", help="修复论文元数据（手动指定 title/DOI，跳过 MD 解析）")
@@ -1872,17 +1940,16 @@ def main() -> None:
     p_et.add_argument("--rebuild", action="store_true", help="重建主题模型")
     p_et.add_argument("--topic", type=int, default=None, help="查看指定主题的论文")
     p_et.add_argument("--top", type=int, default=None, help="返回条数")
-    p_et.add_argument("--min-topic-size", type=int, default=None,
-                       help="最小聚类大小（默认 30）")
-    p_et.add_argument("--nr-topics", type=int, default=None,
-                       help="目标主题数（默认自然聚类）")
+    p_et.add_argument("--min-topic-size", type=int, default=None, help="最小聚类大小（默认 30）")
+    p_et.add_argument("--nr-topics", type=int, default=None, help="目标主题数（默认自然聚类）")
 
     p_es = p_explore_sub.add_parser("search", help="探索库搜索（语义/关键词/融合）")
     p_es.add_argument("--name", required=True, help="探索库名称")
     p_es.add_argument("query", nargs="+", help="查询文本")
     p_es.add_argument("--top", type=int, default=None, help="返回条数")
-    p_es.add_argument("--mode", choices=["semantic", "keyword", "unified"],
-                       default="semantic", help="搜索模式（默认 semantic）")
+    p_es.add_argument(
+        "--mode", choices=["semantic", "keyword", "unified"], default="semantic", help="搜索模式（默认 semantic）"
+    )
 
     p_ev = p_explore_sub.add_parser("viz", help="生成全部可视化（HTML）")
     p_ev.add_argument("--name", required=True, help="探索库名称")
@@ -1969,8 +2036,9 @@ def main() -> None:
     p_setup.set_defaults(func=cmd_setup)
     p_setup_sub = p_setup.add_subparsers(dest="setup_action")
     p_setup_check = p_setup_sub.add_parser("check", help="检查环境状态 / Check environment status")
-    p_setup_check.add_argument("--lang", choices=["en", "zh"], default="zh",
-                               help="输出语言 / Output language (default: zh)")
+    p_setup_check.add_argument(
+        "--lang", choices=["en", "zh"], default="zh", help="输出语言 / Output language (default: zh)"
+    )
 
     # --- migrate-dirs ---
     p_migrate = sub.add_parser("migrate-dirs", help="迁移 data/papers/ 从平铺结构到每篇一目录")
@@ -1998,8 +2066,10 @@ def main() -> None:
     cfg = load_config()
     cfg.ensure_dirs()
 
-    from scholaraio import log as _log, metrics as _metrics
+    from scholaraio import log as _log
+    from scholaraio import metrics as _metrics
     from scholaraio.ingest.metadata._models import configure_session
+
     session_id = _log.setup(cfg)
     _metrics.init(cfg.metrics_db_path, session_id)
     configure_session(cfg.ingest.contact_email)

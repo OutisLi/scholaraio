@@ -30,7 +30,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-
 if TYPE_CHECKING:
     from scholaraio.config import Config
 
@@ -114,7 +113,7 @@ def load_l4(md_path: Path) -> str:
 def enrich_toc(
     json_path: Path,
     md_path: Path,
-    config: "Config",
+    config: Config,
     *,
     force: bool = False,
     inspect: bool = False,
@@ -135,6 +134,7 @@ def enrich_toc(
         提取成功返回 ``True``，失败返回 ``False``。
     """
     from scholaraio.papers import read_meta, write_meta
+
     paper_d = json_path.parent
     data = read_meta(paper_d)
 
@@ -164,7 +164,7 @@ def enrich_toc(
         "Declaration of interests\n\n"
         "Assign level: 1=top-level, 2=subsection (e.g. '2.1'), 3=sub-subsection (e.g. '2.1.1').\n\n"
         "Headers:\n"
-        + "\n".join(f"Line {h['line']}: {'#'*h['level']} {h['text']}" for h in raw_headers)
+        + "\n".join(f"Line {h['line']}: {'#' * h['level']} {h['text']}" for h in raw_headers)
         + "\n\nReturn JSON only:\n"
         '{"toc": [{"line": <N>, "level": <1|2|3>, "title": "<title>"}, ...]}'
     )
@@ -200,7 +200,7 @@ def enrich_toc(
 def enrich_l3(
     json_path: Path,
     md_path: Path,
-    config: "Config",
+    config: Config,
     *,
     force: bool = False,
     max_retries: int = 2,
@@ -225,6 +225,7 @@ def enrich_l3(
         提取成功返回 ``True``，失败返回 ``False``。
     """
     from scholaraio.papers import read_meta, write_meta
+
     paper_d = json_path.parent
     data = read_meta(paper_d)
 
@@ -272,15 +273,13 @@ def enrich_l3(
 #  L3 from TOC (no extra LLM call for header identification)
 # ============================================================================
 
-_CONCLUSION_KEYWORDS = re.compile(
-    r"\b(conclusion|conclusions|concluding|summary|closing)\b", re.IGNORECASE
-)
+_CONCLUSION_KEYWORDS = re.compile(r"\b(conclusion|conclusions|concluding|summary|closing)\b", re.IGNORECASE)
 
 
 def _l3_from_toc(
     lines: list[str],
     toc: list[dict],
-    config: "Config",
+    config: Config,
     max_retries: int,
     inspect: bool,
 ) -> tuple[str | None, str | None]:
@@ -327,9 +326,9 @@ def _l3_from_toc(
 
 _REAL_SECTION_RE = re.compile(
     r"^(?:"
-    r"\d[\d.]*[\s.]|"           # 阿拉伯数字编号: 1, 1.1, 2., etc.
-    r"[IVX]+[\s.)]|"            # 罗马数字: I., II., IV.
-    r"[A-F][\s.)]|"             # 字母编号: A., B.
+    r"\d[\d.]*[\s.]|"  # 阿拉伯数字编号: 1, 1.1, 2., etc.
+    r"[IVX]+[\s.)]|"  # 罗马数字: I., II., IV.
+    r"[A-F][\s.)]|"  # 字母编号: A., B.
     r"(?:abstract|introduction|method|result|discussion|"
     r"conclusion|concluding|summary|reference|bibliography|"
     r"appendix|acknowledge|funding|credit|declaration|"
@@ -350,22 +349,18 @@ def _extract_headers(lines: list[str]) -> list[dict]:
     for i, line in enumerate(lines, start=1):
         m = re.match(r"^(#{1,4})\s+(.+)", line.rstrip())
         if m:
-            headers.append(
-                {"line": i, "level": len(m.group(1)), "text": m.group(2).strip()}
-            )
+            headers.append({"line": i, "level": len(m.group(1)), "text": m.group(2).strip()})
     return headers
 
 
 def _primary_path(
     lines: list[str],
     headers: list[dict],
-    config: "Config",
+    config: Config,
     max_retries: int,
     inspect: bool,
 ) -> tuple[str | None, str | None]:
-    header_list = "\n".join(
-        f"Line {h['line']}: {'#' * h['level']} {h['text']}" for h in headers
-    )
+    header_list = "\n".join(f"Line {h['line']}: {'#' * h['level']} {h['text']}" for h in headers)
     prompt = (
         "Below are all section headers (with line numbers) from an academic paper markdown file.\n"
         "Identify the header that marks the START of the conclusion section "
@@ -393,7 +388,9 @@ def _primary_path(
                     break
 
             extracted = _slice_lines(lines, start_line, end_line)
-            _log.debug("[Primary #%d] extracted lines %d-%s, %d chars", attempt, start_line, end_line or "EOF", len(extracted))
+            _log.debug(
+                "[Primary #%d] extracted lines %d-%s, %d chars", attempt, start_line, end_line or "EOF", len(extracted)
+            )
 
             cleaned, reason = _validate_and_clean(extracted, config)
             _log.debug("[Primary #%d] validate: %s %s", attempt, "PASS" if cleaned else "FAIL", reason)
@@ -413,7 +410,7 @@ def _primary_path(
 
 def _fallback_path(
     lines: list[str],
-    config: "Config",
+    config: Config,
     max_retries: int,
     inspect: bool,
 ) -> tuple[str | None, str | None]:
@@ -421,14 +418,12 @@ def _fallback_path(
 
     # Send first 100 + last 200 lines (conclusion is usually near the end)
     if n <= 300:
-        sample = "\n".join(f"{i+1}: {l}" for i, l in enumerate(lines))
+        sample = "\n".join(f"{i + 1}: {l}" for i, l in enumerate(lines))
     else:
-        head = "\n".join(f"{i+1}: {l}" for i, l in enumerate(lines[:100]))
+        head = "\n".join(f"{i + 1}: {l}" for i, l in enumerate(lines[:100]))
         tail_start = max(100, n - 200)
-        tail = "\n".join(
-            f"{tail_start+i+1}: {l}" for i, l in enumerate(lines[tail_start:])
-        )
-        sample = f"[Lines 1–100]\n{head}\n\n...[中间省略]...\n\n[Lines {tail_start+1}–{n}]\n{tail}"
+        tail = "\n".join(f"{tail_start + i + 1}: {l}" for i, l in enumerate(lines[tail_start:]))
+        sample = f"[Lines 1–100]\n{head}\n\n...[中间省略]...\n\n[Lines {tail_start + 1}–{n}]\n{tail}"
 
     prompt = (
         "Find the conclusion section in this academic paper (markdown format). "
@@ -450,7 +445,9 @@ def _fallback_path(
                 return None, None
 
             extracted = _slice_lines(lines, start_line, end_line)
-            _log.debug("[Fallback #%d] extracted lines %d-%s, %d chars", attempt, start_line, end_line or "EOF", len(extracted))
+            _log.debug(
+                "[Fallback #%d] extracted lines %d-%s, %d chars", attempt, start_line, end_line or "EOF", len(extracted)
+            )
 
             cleaned, reason = _validate_and_clean(extracted, config)
             _log.debug("[Fallback #%d] validate: %s %s", attempt, "PASS" if cleaned else "FAIL", reason)
@@ -468,7 +465,7 @@ def _fallback_path(
 # ============================================================================
 
 
-def _validate_and_clean(text: str, config: "Config") -> tuple[str | None, str]:
+def _validate_and_clean(text: str, config: Config) -> tuple[str | None, str]:
     """校验并清理提取的结论文本。
 
     返回 (cleaned_text, reason)：
@@ -509,8 +506,9 @@ def _validate_and_clean(text: str, config: "Config") -> tuple[str | None, str]:
 # ============================================================================
 
 
-def _call_llm(prompt: str, config: "Config", timeout: int | None = None) -> str:
+def _call_llm(prompt: str, config: Config, timeout: int | None = None) -> str:
     from scholaraio.metrics import call_llm
+
     result = call_llm(prompt, config, timeout=timeout, purpose="loader")
     return result.content
 
@@ -526,7 +524,7 @@ def _parse_json(text: str) -> dict:
         # Fix unescaped backslashes (e.g. LaTeX: \alpha, \vec, \frac).
         # Only runs when initial parse fails. Valid JSON escapes are
         # preserved: \" \\ \/ \b \f \n \r \t \uXXXX
-        fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)
+        fixed = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", text)
         try:
             return json.loads(fixed)
         except json.JSONDecodeError:

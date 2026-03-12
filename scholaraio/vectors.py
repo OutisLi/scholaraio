@@ -16,12 +16,12 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import logging
 import os
 import sqlite3
 import struct
 import time
 from pathlib import Path
-import logging
 from typing import TYPE_CHECKING
 
 _log = logging.getLogger(__name__)
@@ -39,9 +39,7 @@ CREATE TABLE IF NOT EXISTS paper_vectors (
 );
 """
 
-_MIGRATE_HASH = (
-    "ALTER TABLE paper_vectors ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''"
-)
+_MIGRATE_HASH = "ALTER TABLE paper_vectors ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''"
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
@@ -87,6 +85,7 @@ def _load_model(cfg: Config | None = None):
     if device_cfg == "auto":
         try:
             import torch
+
             device = "cuda" if torch.cuda.is_available() else "cpu"
         except ImportError:
             device = "cpu"
@@ -146,7 +145,6 @@ def _resolve_model_path(model_name: str, cache_dir: str, source: str) -> str | N
     return None
 
 
-
 # ============================================================================
 #  GPU profiling & adaptive batching
 # ============================================================================
@@ -174,8 +172,7 @@ def _run_profile(model, cfg: Config | None = None) -> dict:
     if not torch.cuda.is_available():
         return {}
 
-    device = next(model.parameters() if hasattr(model, "parameters")
-                  else model[0].parameters()).device
+    device = next(model.parameters() if hasattr(model, "parameters") else model[0].parameters()).device
     if device.type != "cuda":
         return {}
 
@@ -196,13 +193,15 @@ def _run_profile(model, cfg: Config | None = None) -> dict:
     model.encode([tiny], normalize_embeddings=True, batch_size=1)
     baseline = torch.cuda.memory_allocated(device)
 
-    model_name = (
-        cfg.embed.model if cfg is not None else "Qwen/Qwen3-Embedding-0.6B"
-    )
+    model_name = cfg.embed.model if cfg is not None else "Qwen/Qwen3-Embedding-0.6B"
 
-    _log.info("[gpu-profile] Profiling GPU memory for %s on %s "
-              "(baseline=%.0f MB, total=%.0f MB) ...",
-              model_name, gpu_name, baseline / 1024**2, gpu_total / 1024**2)
+    _log.info(
+        "[gpu-profile] Profiling GPU memory for %s on %s (baseline=%.0f MB, total=%.0f MB) ...",
+        model_name,
+        gpu_name,
+        baseline / 1024**2,
+        gpu_total / 1024**2,
+    )
 
     # Probe from 64 tokens, doubling each time, until OOM
     tgt_tokens = 64
@@ -220,11 +219,14 @@ def _run_profile(model, cfg: Config | None = None) -> dict:
             peak = torch.cuda.max_memory_allocated(device)
             incremental = peak - baseline
             per_sample[tgt_tokens] = incremental
-            _log.info("[gpu-profile]   tokens=%5d  incremental=%6.0f MB  (peak=%.0f MB)",
-                      tgt_tokens, incremental / 1024**2, peak / 1024**2)
+            _log.info(
+                "[gpu-profile]   tokens=%5d  incremental=%6.0f MB  (peak=%.0f MB)",
+                tgt_tokens,
+                incremental / 1024**2,
+                peak / 1024**2,
+            )
         except torch.cuda.OutOfMemoryError:
-            _log.info("[gpu-profile]   tokens=%5d  OOM — max single-sample capacity found",
-                      tgt_tokens)
+            _log.info("[gpu-profile]   tokens=%5d  OOM — max single-sample capacity found", tgt_tokens)
             torch.cuda.empty_cache()
             break
 
@@ -247,8 +249,7 @@ def _load_or_create_profile(model, cfg: Config | None = None) -> dict:
     if not torch.cuda.is_available():
         return {}
 
-    device = next(model.parameters() if hasattr(model, "parameters")
-                  else model[0].parameters()).device
+    device = next(model.parameters() if hasattr(model, "parameters") else model[0].parameters()).device
     if device.type != "cuda":
         return {}
 
@@ -280,9 +281,7 @@ def _load_or_create_profile(model, cfg: Config | None = None) -> dict:
         except Exception:
             pass
     all_profiles[cache_key] = profile
-    _GPU_PROFILE_FILE.write_text(
-        json.dumps(all_profiles, indent=2, ensure_ascii=False) + "\n", "utf-8"
-    )
+    _GPU_PROFILE_FILE.write_text(json.dumps(all_profiles, indent=2, ensure_ascii=False) + "\n", "utf-8")
     _log.info("[gpu-profile] saved profile to %s", _GPU_PROFILE_FILE)
     return profile
 
@@ -317,8 +316,7 @@ def _estimate_mem_per_sample(est_tokens: int, profile: dict) -> int:
     return int(m_max * ratio * ratio)
 
 
-def _compute_batch_size(est_tokens: int, profile: dict,
-                        safety_factor: float = 0.85) -> int:
+def _compute_batch_size(est_tokens: int, profile: dict, safety_factor: float = 0.85) -> int:
     """Compute optimal batch_size for texts of a given token length.
 
     Uses incremental memory per sample (peak minus baseline) from the
@@ -357,15 +355,13 @@ def _embed_batch(texts: list[str], cfg: Config | None = None) -> list[list[float
     on a one-time GPU memory profile.  Falls back to halving the batch
     (and ultimately CPU) on OOM.
     """
-    import numpy as np
 
     model = _load_model(cfg)
     profile = _load_or_create_profile(model, cfg)
 
     if not profile:
         # CPU path or profiling unavailable — use conservative fixed batch
-        vecs = model.encode(texts, normalize_embeddings=True, batch_size=8,
-                            show_progress_bar=len(texts) > 100)
+        vecs = model.encode(texts, normalize_embeddings=True, batch_size=8, show_progress_bar=len(texts) > 100)
         return vecs.tolist()
 
     # Estimate token count per text (~3.5 chars per token for mixed text)
@@ -406,15 +402,13 @@ def _embed_batch(texts: list[str], cfg: Config | None = None) -> list[list[float
         bucket_texts = [texts[i] for i in indices]
         bs = _compute_batch_size(bucket_key, profile)
 
-        _log.debug("[embed] bucket tokens<=%d: %d texts, batch_size=%d",
-                   bucket_key, len(bucket_texts), bs)
+        _log.debug("[embed] bucket tokens<=%d: %d texts, batch_size=%d", bucket_key, len(bucket_texts), bs)
 
         # Encode with OOM retry
         encoded = None
         while encoded is None:
             try:
-                encoded = model.encode(bucket_texts, normalize_embeddings=True,
-                                       batch_size=bs)
+                encoded = model.encode(bucket_texts, normalize_embeddings=True, batch_size=bs)
             except torch.cuda.OutOfMemoryError:
                 torch.cuda.empty_cache()
                 if bs > 1:
@@ -423,9 +417,7 @@ def _embed_batch(texts: list[str], cfg: Config | None = None) -> list[list[float
                 else:
                     _log.warning("[embed] OOM at batch_size=1, falling back to CPU")
                     model_cpu = model.to("cpu")
-                    encoded = model_cpu.encode(bucket_texts,
-                                               normalize_embeddings=True,
-                                               batch_size=1)
+                    encoded = model_cpu.encode(bucket_texts, normalize_embeddings=True, batch_size=1)
                     model.to("cuda")
 
         for idx, vec in zip(indices, encoded):
@@ -451,6 +443,7 @@ class QwenEmbedder:
 
     def embed_documents(self, documents, verbose=False):
         import numpy as np
+
         return np.array(_embed_batch(documents, self._cfg), dtype="float32")
 
     def embed_words(self, words, verbose=False):
@@ -522,9 +515,7 @@ def _append_faiss_files(
     paper_ids.extend(new_ids)
 
     faiss.write_index(index, str(index_path))
-    ids_path.write_text(
-        json.dumps(paper_ids, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    ids_path.write_text(json.dumps(paper_ids, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def _append_faiss(db_path: Path, new_ids: list[str], new_vecs: list[list[float]]) -> None:
@@ -569,9 +560,7 @@ def build_vectors(papers_dir: Path, db_path: Path, rebuild: bool = False, cfg: C
         # Build lookup of existing hashes for incremental check
         existing_hashes: dict[str, str] = {}
         if not rebuild:
-            for row in conn.execute(
-                "SELECT paper_id, content_hash FROM paper_vectors"
-            ).fetchall():
+            for row in conn.execute("SELECT paper_id, content_hash FROM paper_vectors").fetchall():
                 existing_hashes[row[0]] = row[1]
 
         # Collect papers to embed
@@ -615,8 +604,7 @@ def build_vectors(papers_dir: Path, db_path: Path, rebuild: bool = False, cfg: C
         for (paper_id, _, h), vec in zip(to_embed, vecs):
             is_update = paper_id in existing_hashes
             conn.execute(
-                "INSERT OR REPLACE INTO paper_vectors "
-                "(paper_id, embedding, content_hash) VALUES (?, ?, ?)",
+                "INSERT OR REPLACE INTO paper_vectors (paper_id, embedding, content_hash) VALUES (?, ?, ?)",
                 (paper_id, _pack(vec), h),
             )
             new_ids.append(paper_id)
@@ -650,7 +638,7 @@ def _build_faiss_from_db(
     ids_path: Path,
     *,
     empty_msg: str = "向量索引为空，请先运行 `scholaraio embed`",
-) -> tuple["faiss.Index", list[str]]:
+) -> tuple[faiss.Index, list[str]]:
     """Build or load a FAISS IndexFlatIP from a paper_vectors table.
 
     Generic implementation that works with any SQLite DB containing a
@@ -678,9 +666,7 @@ def _build_faiss_from_db(
 
     conn = sqlite3.connect(db_path)
     try:
-        rows = conn.execute(
-            "SELECT paper_id, embedding FROM paper_vectors"
-        ).fetchall()
+        rows = conn.execute("SELECT paper_id, embedding FROM paper_vectors").fetchall()
     finally:
         conn.close()
 
@@ -696,8 +682,7 @@ def _build_faiss_from_db(
     valid_rows = []
     for r in rows:
         if len(r[1]) != expected_blob_len:
-            _log.warning("Skipping paper %s: blob length %d != expected %d",
-                         r[0], len(r[1]), expected_blob_len)
+            _log.warning("Skipping paper %s: blob length %d != expected %d", r[0], len(r[1]), expected_blob_len)
             continue
         valid_rows.append(r)
 
@@ -715,13 +700,11 @@ def _build_faiss_from_db(
     index.add(vecs)
 
     faiss.write_index(index, str(index_path))
-    ids_path.write_text(
-        json.dumps(paper_ids, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    ids_path.write_text(json.dumps(paper_ids, ensure_ascii=False) + "\n", encoding="utf-8")
     return index, paper_ids
 
 
-def _build_faiss_index(db_path: Path) -> tuple["faiss.Index", list[str]]:
+def _build_faiss_index(db_path: Path) -> tuple[faiss.Index, list[str]]:
     """Build or load a FAISS IndexFlatIP for the main library."""
     idx_p, ids_p = _faiss_paths(db_path)
     return _build_faiss_from_db(db_path, idx_p, ids_p)
@@ -729,7 +712,7 @@ def _build_faiss_index(db_path: Path) -> tuple["faiss.Index", list[str]]:
 
 def _vsearch_faiss(
     query: str,
-    index: "faiss.Index",
+    index: faiss.Index,
     paper_ids: list[str],
     top_k: int,
     cfg: Config | None = None,
@@ -803,9 +786,7 @@ def vsearch(
         top_k = cfg.embed.top_k if cfg is not None else 10
 
     if not db_path.exists():
-        raise FileNotFoundError(
-            f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`"
-        )
+        raise FileNotFoundError(f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`")
 
     conn = sqlite3.connect(db_path)
     try:
@@ -813,9 +794,7 @@ def vsearch(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='paper_vectors'"
         ).fetchone()
         if not has_vectors:
-            raise FileNotFoundError(
-                "向量索引不存在，请先运行 `scholaraio embed`"
-            )
+            raise FileNotFoundError("向量索引不存在，请先运行 `scholaraio embed`")
     finally:
         conn.close()
 
@@ -832,9 +811,7 @@ def vsearch(
     # Load metadata from FTS5 table
     conn = sqlite3.connect(db_path)
     try:
-        has_fts = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='papers'"
-        ).fetchone()
+        has_fts = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='papers'").fetchone()
         meta_map: dict[str, dict] = {}
         if has_fts:
             conn.row_factory = sqlite3.Row
@@ -859,17 +836,19 @@ def vsearch(
             continue
         pid = faiss_ids[idx]
         meta = meta_map.get(pid, {})
-        results.append({
-            "paper_id": pid,
-            "dir_name": dir_map.get(pid, ""),
-            "title": meta.get("title") or pid,
-            "authors": meta.get("authors") or "",
-            "year": meta.get("year") or "",
-            "journal": meta.get("journal") or "",
-            "citation_count": meta.get("citation_count") or "",
-            "paper_type": meta.get("paper_type") or "",
-            "score": float(score),
-        })
+        results.append(
+            {
+                "paper_id": pid,
+                "dir_name": dir_map.get(pid, ""),
+                "title": meta.get("title") or pid,
+                "authors": meta.get("authors") or "",
+                "year": meta.get("year") or "",
+                "journal": meta.get("journal") or "",
+                "citation_count": meta.get("citation_count") or "",
+                "paper_type": meta.get("paper_type") or "",
+                "score": float(score),
+            }
+        )
 
     if paper_ids is not None:
         results = [r for r in results if r["paper_id"] in paper_ids]
@@ -902,14 +881,11 @@ def _post_filter(
     if year:
         start_i, end_i = parse_year_range(year)
         if start_i is not None and end_i is not None:
-            filtered = [r for r in filtered
-                        if _safe_year(r) is not None and start_i <= _safe_year(r) <= end_i]
+            filtered = [r for r in filtered if _safe_year(r) is not None and start_i <= _safe_year(r) <= end_i]
         elif start_i is not None:
-            filtered = [r for r in filtered
-                        if _safe_year(r) is not None and _safe_year(r) >= start_i]
+            filtered = [r for r in filtered if _safe_year(r) is not None and _safe_year(r) >= start_i]
         elif end_i is not None:
-            filtered = [r for r in filtered
-                        if _safe_year(r) is not None and _safe_year(r) <= end_i]
+            filtered = [r for r in filtered if _safe_year(r) is not None and _safe_year(r) <= end_i]
     if journal:
         j_lower = journal.lower()
         filtered = [r for r in filtered if j_lower in str(r.get("journal", "")).lower()]

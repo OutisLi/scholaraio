@@ -14,12 +14,13 @@ import json as _json
 import logging
 import sqlite3
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING, Any
 
 import requests
 
@@ -45,6 +46,7 @@ class LLMResult:
         model: 实际使用的模型名。
         duration_s: 调用耗时（秒）。
     """
+
     content: str
     tokens_in: int = 0
     tokens_out: int = 0
@@ -325,6 +327,7 @@ def timed(name: str = "", category: str = "step"):
         name: 事件名称，默认为函数全限定名。
         category: 事件类别。
     """
+
     def decorator(fn):
         event_name = name or f"{fn.__module__}.{fn.__qualname__}"
 
@@ -334,6 +337,7 @@ def timed(name: str = "", category: str = "step"):
                 return fn(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
@@ -344,7 +348,7 @@ def timed(name: str = "", category: str = "step"):
 
 def call_llm(
     prompt: str,
-    config: "Config | LLMConfig",
+    config: Config | LLMConfig,
     *,
     api_key: str = "",
     system: str | None = None,
@@ -380,6 +384,7 @@ def call_llm(
     """
     # Support both Config (has .llm attr) and LLMConfig (has .base_url directly)
     from .config import LLMConfig
+
     if isinstance(config, LLMConfig):
         llm_cfg = config
         resolved_key = api_key or llm_cfg.api_key
@@ -436,12 +441,17 @@ def call_llm(
         duration = round(time.monotonic() - t0, 3)
         _log.debug(
             "LLM [%s] %d tokens (in=%d out=%d) %.1fs [%s]",
-            purpose or "unnamed", tokens_total, tokens_in, tokens_out,
-            duration, status,
+            purpose or "unnamed",
+            tokens_total,
+            tokens_in,
+            tokens_out,
+            duration,
+            status,
         )
         if _store:
             _store.record(
-                "llm", purpose or "unnamed",
+                "llm",
+                purpose or "unnamed",
                 duration_s=duration,
                 tokens_in=tokens_in if tokens_in is not None else None,
                 tokens_out=tokens_out if tokens_out is not None else None,

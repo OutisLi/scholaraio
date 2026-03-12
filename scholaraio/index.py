@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS citations (
 );
 """
 _CITATIONS_IDX_TARGET_DOI = "CREATE INDEX IF NOT EXISTS idx_cit_target_doi ON citations(target_doi);"
-_CITATIONS_IDX_TARGET_ID = "CREATE INDEX IF NOT EXISTS idx_cit_target_id ON citations(target_id) WHERE target_id IS NOT NULL;"
+_CITATIONS_IDX_TARGET_ID = (
+    "CREATE INDEX IF NOT EXISTS idx_cit_target_id ON citations(target_id) WHERE target_id IS NOT NULL;"
+)
 
 
 def _index_hash(meta: dict) -> str:
@@ -117,8 +119,8 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
     Returns:
         本次索引的论文数量。
     """
-    import json as _json
-    from scholaraio.papers import iter_paper_dirs, read_meta as _read_meta
+    from scholaraio.papers import iter_paper_dirs
+    from scholaraio.papers import read_meta as _read_meta
 
     conn = sqlite3.connect(db_path)
     try:
@@ -150,9 +152,7 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
         # Load existing hashes for incremental change detection
         existing_hashes: dict[str, str] = {}
         if not rebuild:
-            for row in conn.execute(
-                "SELECT paper_id, content_hash FROM papers_hash"
-            ).fetchall():
+            for row in conn.execute("SELECT paper_id, content_hash FROM papers_hash").fetchall():
                 existing_hashes[row[0]] = row[1]
 
         count = 0
@@ -243,9 +243,7 @@ _SEARCH_COLS = "paper_id, title, authors, year, journal, doi, paper_type, citati
 
 def _ensure_fts_table(conn: sqlite3.Connection) -> None:
     """Raise FileNotFoundError if the FTS5 papers table does not exist."""
-    has_table = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='papers'"
-    ).fetchone()
+    has_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='papers'").fetchone()
     if not has_table:
         raise FileNotFoundError("FTS5 索引表不存在，请先运行 `scholaraio index`")
 
@@ -288,9 +286,7 @@ def search(
         top_k = cfg.search.top_k if cfg is not None else 20
 
     if not db_path.exists():
-        raise FileNotFoundError(
-            f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`"
-        )
+        raise FileNotFoundError(f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`")
 
     conn = sqlite3.connect(db_path)
     try:
@@ -351,9 +347,7 @@ def search_author(
         top_k = cfg.search.top_k if cfg is not None else 20
 
     if not db_path.exists():
-        raise FileNotFoundError(
-            f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`"
-        )
+        raise FileNotFoundError(f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`")
 
     conn = sqlite3.connect(db_path)
     try:
@@ -410,9 +404,7 @@ def top_cited(
         FileNotFoundError: 索引文件或 FTS5 表不存在。
     """
     if not db_path.exists():
-        raise FileNotFoundError(
-            f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`"
-        )
+        raise FileNotFoundError(f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`")
 
     conn = sqlite3.connect(db_path)
     try:
@@ -506,9 +498,7 @@ def _safe_query(query: str) -> str:
 
 def _enrich_dir_names(results: list[dict], conn: sqlite3.Connection) -> list[dict]:
     """Enrich search results with dir_name from papers_registry."""
-    has_reg = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='papers_registry'"
-    ).fetchone()
+    has_reg = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='papers_registry'").fetchone()
     if not has_reg:
         return results
     id_to_dir: dict[str, str] = {}
@@ -540,21 +530,15 @@ def lookup_paper(db_path: Path, user_input: str) -> dict | None:
             return None
         conn.row_factory = sqlite3.Row
         # Try UUID
-        row = conn.execute(
-            "SELECT * FROM papers_registry WHERE id = ?", (user_input,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM papers_registry WHERE id = ?", (user_input,)).fetchone()
         if row:
             return dict(row)
         # Try dir_name
-        row = conn.execute(
-            "SELECT * FROM papers_registry WHERE dir_name = ?", (user_input,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM papers_registry WHERE dir_name = ?", (user_input,)).fetchone()
         if row:
             return dict(row)
         # Try DOI
-        row = conn.execute(
-            "SELECT * FROM papers_registry WHERE doi = ?", (user_input,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM papers_registry WHERE doi = ?", (user_input,)).fetchone()
         if row:
             return dict(row)
     finally:
@@ -603,8 +587,13 @@ def unified_search(
     fts_results: list[dict] = []
     try:
         fts_results = search(
-            query, db_path, top_k=top_k, cfg=cfg,
-            year=year, journal=journal, paper_type=paper_type,
+            query,
+            db_path,
+            top_k=top_k,
+            cfg=cfg,
+            year=year,
+            journal=journal,
+            paper_type=paper_type,
             paper_ids=paper_ids,
         )
     except FileNotFoundError:
@@ -614,9 +603,15 @@ def unified_search(
     vec_results: list[dict] = []
     try:
         from scholaraio.vectors import vsearch
+
         vec_results = vsearch(
-            query, db_path, top_k=top_k, cfg=cfg,
-            year=year, journal=journal, paper_type=paper_type,
+            query,
+            db_path,
+            top_k=top_k,
+            cfg=cfg,
+            year=year,
+            journal=journal,
+            paper_type=paper_type,
             paper_ids=paper_ids,
         )
     except (FileNotFoundError, ImportError):
@@ -719,9 +714,7 @@ def get_citing_papers(
     try:
         conn.row_factory = sqlite3.Row
         # Get DOI of target paper
-        row = conn.execute(
-            "SELECT doi FROM papers_registry WHERE id = ?", (paper_id,)
-        ).fetchone()
+        row = conn.execute("SELECT doi FROM papers_registry WHERE id = ?", (paper_id,)).fetchone()
         target_doi = row["doi"] if row else ""
 
         # Find papers that cite this paper (by target_id or target_doi)

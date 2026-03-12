@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 
 def paper_dir(papers_dir: Path, dir_name: str) -> Path:
@@ -67,7 +67,7 @@ def best_citation(meta: dict) -> int:
     if not cc or not isinstance(cc, dict):
         return 0
     vals = [v for v in cc.values() if isinstance(v, (int, float))]
-    return max(vals) if vals else 0
+    return int(max(vals)) if vals else 0
 
 
 def parse_year_range(year: str) -> tuple[int | None, int | None]:
