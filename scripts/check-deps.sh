@@ -15,7 +15,7 @@ fi
 echo "[ScholarAIO] scholaraio CLI not found. Attempting install from plugin..."
 
 if [ -f "$PLUGIN_ROOT/pyproject.toml" ]; then
-    pip install -e "$PLUGIN_ROOT" 2>&1 | tail -1
+    pip install "$PLUGIN_ROOT" 2>&1 | tail -1
     if command -v scholaraio >/dev/null 2>&1; then
         echo "[ScholarAIO] Installed successfully. Run 'scholaraio setup check' to verify environment."
         exit 0
