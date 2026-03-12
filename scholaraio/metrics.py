@@ -13,6 +13,7 @@ from __future__ import annotations
 import json as _json
 import logging
 import sqlite3
+import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -120,7 +121,8 @@ class MetricsStore:
 
     def __init__(self, db_path: Path | str, session_id: str) -> None:
         self._session_id = session_id
-        self._conn = sqlite3.connect(str(db_path))
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute(_CREATE_TABLE)
         for idx_sql in _CREATE_INDEXES:
@@ -155,24 +157,25 @@ class MetricsStore:
             status: ``"ok"`` | ``"error"`` | ``"skip"``。
             detail: 额外信息（序列化为 JSON）。
         """
-        self._conn.execute(
-            "INSERT INTO events (session_id, timestamp, category, name, "
-            "duration_s, tokens_in, tokens_out, model, status, detail) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                self._session_id,
-                datetime.now(timezone.utc).isoformat(),
-                category,
-                name,
-                duration_s,
-                tokens_in,
-                tokens_out,
-                model,
-                status,
-                _json.dumps(detail, ensure_ascii=False) if detail else None,
-            ),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO events (session_id, timestamp, category, name, "
+                "duration_s, tokens_in, tokens_out, model, status, detail) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    self._session_id,
+                    datetime.now(timezone.utc).isoformat(),
+                    category,
+                    name,
+                    duration_s,
+                    tokens_in,
+                    tokens_out,
+                    model,
+                    status,
+                    _json.dumps(detail, ensure_ascii=False) if detail else None,
+                ),
+            )
+            self._conn.commit()
 
     def query(
         self,
