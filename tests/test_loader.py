@@ -8,8 +8,14 @@ layers that require LLM enrichment or full-text paper files.
 from __future__ import annotations
 
 import json
+from typing import cast
 
+from scholaraio.config import Config
 from scholaraio.loader import L3_SKIP_TYPES, enrich_l3, load_l1, load_l2
+
+# enrich_l3 requires a Config argument but the skip-by-type branch
+# returns before it is used.  We use a typed sentinel so mypy is happy.
+_UNUSED_CONFIG = cast(Config, None)
 
 
 class TestLoadL1:
@@ -63,8 +69,8 @@ class TestEnrichL3Skip:
         json_path = tmp_papers / "Wang-2024-DeepLearning" / "meta.json"
         md_path = json_path.parent / "paper.md"
 
-        # config=None is fine because the skip happens before config is used
-        result = enrich_l3(json_path, md_path, config=None)
+        # config=_UNUSED_CONFIG is fine because the skip happens before config is used
+        result = enrich_l3(json_path, md_path, config=_UNUSED_CONFIG)
 
         assert result is True
         data = json.loads(json_path.read_text(encoding="utf-8"))
@@ -82,7 +88,7 @@ class TestEnrichL3Skip:
         )
         (d / "paper.md").write_text("# Handbook\n\nContent.", encoding="utf-8")
 
-        result = enrich_l3(d / "meta.json", d / "paper.md", config=None)
+        result = enrich_l3(d / "meta.json", d / "paper.md", config=_UNUSED_CONFIG)
 
         assert result is True
         data = json.loads((d / "meta.json").read_text(encoding="utf-8"))

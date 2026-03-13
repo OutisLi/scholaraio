@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import sys
 import time
@@ -1384,6 +1385,26 @@ def _collect_existing_dois(papers_dir: Path) -> dict[str, Path]:
     return dois
 
 
+def _parse_detect_json(text: str) -> dict:
+    """Tolerant JSON extraction from LLM response (handles fences/extra text)."""
+    text = text.strip()
+    # Strip ```json ... ``` fences
+    m = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except json.JSONDecodeError:
+            pass
+    # Try bare JSON object (greedy to handle nested braces)
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+
 def _detect_thesis(ctx: InboxCtx) -> bool:
     """LLM 判断无 DOI 论文是否为学位论文。
 
@@ -1445,7 +1466,7 @@ def _detect_thesis(ctx: InboxCtx) -> bool:
     )
     try:
         result = call_llm(prompt, ctx.cfg, purpose="detect_thesis", max_tokens=200)
-        data = json.loads(result.content)
+        data = _parse_detect_json(result.content)
         is_thesis = bool(data.get("is_thesis", False))
         if is_thesis:
             reason = data.get("reason", "")
@@ -1472,14 +1493,13 @@ def _detect_book(ctx: InboxCtx) -> bool:
     if not ctx.md_path or not ctx.md_path.exists():
         return False
 
-    try:
-        with open(ctx.md_path, encoding="utf-8") as f:
-            text = f.read(30000)
-    except Exception as e:
-        _log.debug("failed to read md for book detection: %s", e)
-        return False
+    # Fast heuristic: paper_type already set by API (Crossref/S2/OpenAlex)
+    _BOOK_TYPES = {"book", "monograph", "edited-book", "reference-book"}
+    if ctx.meta and ctx.meta.paper_type and ctx.meta.paper_type.lower().strip() in _BOOK_TYPES:
+        _log.debug("book detected by API paper_type: %s", ctx.meta.paper_type)
+        return True
 
-    # Fast heuristic: title/metadata already hints book
+    # Fast heuristic: title keywords
     title = (ctx.meta.title or "").lower() if ctx.meta else ""
     for keyword in (
         "handbook",
@@ -1492,6 +1512,13 @@ def _detect_book(ctx: InboxCtx) -> bool:
         if keyword in title:
             _log.debug("book detected by title keyword: %s", keyword)
             return True
+
+    try:
+        with open(ctx.md_path, encoding="utf-8") as f:
+            text = f.read(30000)
+    except Exception as e:
+        _log.debug("failed to read md for book detection: %s", e)
+        return False
 
     # LLM detection
     try:
@@ -1517,7 +1544,7 @@ def _detect_book(ctx: InboxCtx) -> bool:
     )
     try:
         result = call_llm(prompt, ctx.cfg, purpose="detect_book", max_tokens=200)
-        data = json.loads(result.content)
+        data = _parse_detect_json(result.content)
         is_book = bool(data.get("is_book", False))
         if is_book:
             reason = data.get("reason", "")

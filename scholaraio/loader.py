@@ -249,6 +249,10 @@ def enrich_l3(
     paper_d = json_path.parent
     data = read_meta(paper_d)
 
+    if data.get("l3_conclusion") and not force:
+        _log.debug("existing L3 (method: %s), skipping", data.get("l3_extraction_method", "?"))
+        return True
+
     # Skip L3 for non-article types (thesis, book, document, etc.)
     paper_type = (data.get("paper_type") or "").lower().strip()
     if paper_type in L3_SKIP_TYPES:
@@ -256,10 +260,6 @@ def enrich_l3(
         data["l3_extraction_method"] = "skipped"
         data["l3_extracted_at"] = datetime.now().isoformat(timespec="seconds")
         write_meta(paper_d, data)
-        return True
-
-    if data.get("l3_conclusion") and not force:
-        _log.debug("existing L3 (method: %s), skipping", data.get("l3_extraction_method", "?"))
         return True
 
     lines = md_path.read_text(encoding="utf-8", errors="replace").splitlines()
