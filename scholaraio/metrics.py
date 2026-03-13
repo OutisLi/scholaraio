@@ -461,7 +461,7 @@ def call_llm(
 
 def _call_openai_compat(
     prompt: str,
-    llm_cfg: "LLMConfig",
+    llm_cfg: LLMConfig,
     api_key: str,
     *,
     system: str | None,
@@ -509,7 +509,7 @@ def _call_openai_compat(
 
 def _call_anthropic(
     prompt: str,
-    llm_cfg: "LLMConfig",
+    llm_cfg: LLMConfig,
     api_key: str,
     *,
     system: str | None,
@@ -556,7 +556,7 @@ def _call_anthropic(
 
 def _call_google(
     prompt: str,
-    llm_cfg: "LLMConfig",
+    llm_cfg: LLMConfig,
     api_key: str,
     *,
     system: str | None,
