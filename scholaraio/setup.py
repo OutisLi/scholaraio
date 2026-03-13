@@ -464,6 +464,7 @@ paths:
 
 # LLM backend (multi-provider support)
 # API key: set in config.local.yaml or env var
+#   SCHOLARAIO_LLM_API_KEY (generic fallback), or provider-specific:
 #   DEEPSEEK_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY / GEMINI_API_KEY
 llm:
   backend: openai-compat   # openai-compat | anthropic | google
