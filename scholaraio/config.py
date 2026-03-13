@@ -394,6 +394,7 @@ def _build_config(data: dict, root: Path) -> Config:
         timeout=int(llm_data.get("timeout", 30)),
         timeout_toc=int(llm_data.get("timeout_toc", 120)),
         timeout_clean=int(llm_data.get("timeout_clean", 90)),
+        concurrency=max(1, int(llm_data.get("concurrency", 32))),
     )
 
     ingest = IngestConfig(

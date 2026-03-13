@@ -953,8 +953,9 @@ def run_pipeline(
             ok_total = fail_total = skip_total = 0
             step_times: dict[str, float] = {}
 
-            # LLM-bound steps (toc, l3) benefit from concurrent execution.
-            # Determine whether to use concurrent processing.
+            # Concurrent execution for papers_steps when LLM-bound steps
+            # (toc, l3) are present. All papers_steps run per-paper inside
+            # _process_one_paper(); different papers execute in parallel.
             llm_steps = {"toc", "l3"}
             has_llm_steps = bool(set(papers_steps) & llm_steps)
             workers = cfg.llm.concurrency if has_llm_steps else 1
@@ -984,7 +985,7 @@ def run_pipeline(
                 from concurrent.futures import ThreadPoolExecutor, as_completed
 
                 ui(f"  (concurrency: {workers} workers)")
-                with ThreadPoolExecutor(max_workers=workers) as pool:
+                with ThreadPoolExecutor(max_workers=min(workers, len(json_paths))) as pool:
                     futures = {pool.submit(_process_one_paper, jp): jp for jp in json_paths}
                     for done_count, fut in enumerate(as_completed(futures), 1):
                         jp = futures[fut]
@@ -1005,7 +1006,11 @@ def run_pipeline(
             else:
                 for json_path in json_paths:
                     ui(f"\n{json_path.parent.name}")
-                    status, timings = _process_one_paper(json_path)
+                    try:
+                        status, timings = _process_one_paper(json_path)
+                    except Exception:
+                        _log.exception("paper failed: %s", json_path.parent.name)
+                        status, timings = "fail", {}
                     if status == "skip":
                         skip_total += 1
                     elif status == "ok":
