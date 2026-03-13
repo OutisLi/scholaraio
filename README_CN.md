@@ -129,36 +129,57 @@ PDF → MinerU → 结构化 Markdown（图表 + LaTeX 公式保留）
 <details>
 <summary><strong>CLI 命令一览</strong></summary>
 
+**检索与阅读**
 ```
-scholaraio index              构建 FTS5 检索索引
-scholaraio search QUERY       关键词检索
-scholaraio search-author NAME 按作者搜索
+scholaraio search QUERY       关键词检索（FTS5）
 scholaraio vsearch QUERY      语义向量检索
 scholaraio usearch QUERY      融合检索（关键词 + 语义）
-scholaraio show PAPER         查看论文内容（L1-L4）
-scholaraio embed              生成语义向量
-scholaraio pipeline           运行入库流水线
-scholaraio explore            期刊探索（OpenAlex）
-scholaraio topics             BERTopic 主题建模
-scholaraio refs PAPER         查看参考文献
-scholaraio citing PAPER       查看被引论文
-scholaraio shared-refs A B    共同参考文献分析
+scholaraio search-author NAME 按作者搜索
 scholaraio top-cited          按引用量排序
-scholaraio refetch            重新查询引用量
-scholaraio export             导出 BibTeX
-scholaraio ws                 工作区管理
-scholaraio audit              数据质量审计
-scholaraio repair             修复元数据
-scholaraio rename             标准化目录名
+scholaraio show PAPER         查看论文内容（L1-L4）
+```
+
+**入库与富化**
+```
+scholaraio pipeline           运行入库流水线
+scholaraio index              构建 FTS5 检索索引
+scholaraio embed              生成语义向量
 scholaraio enrich-toc         提取目录结构
 scholaraio enrich-l3          提取结论段
 scholaraio backfill-abstract  补全缺失摘要
+scholaraio refetch            重新查询引用量
+```
+
+**引用图谱**
+```
+scholaraio refs PAPER         查看参考文献
+scholaraio citing PAPER       查看被引论文
+scholaraio shared-refs A B    共同参考文献分析
+```
+
+**探索与主题**
+```
+scholaraio explore            文献探索（OpenAlex）
+scholaraio topics             BERTopic 主题建模
+```
+
+**导入与导出**
+```
 scholaraio import-endnote     从 Endnote 导入
 scholaraio import-zotero      从 Zotero 导入
 scholaraio attach-pdf         为已有论文补充 PDF
+scholaraio export             导出 BibTeX
+scholaraio ws                 工作区管理
+```
+
+**维护**
+```
+scholaraio audit              数据质量审计
+scholaraio repair             修复元数据
+scholaraio rename             标准化目录名
+scholaraio migrate-dirs       迁移旧版目录结构
 scholaraio setup              环境配置向导
 scholaraio metrics            查看 LLM 用量统计
-scholaraio migrate-dirs       迁移论文目录结构（扁平 → 按目录）
 ```
 
 </details>
@@ -166,29 +187,17 @@ scholaraio migrate-dirs       迁移论文目录结构（扁平 → 按目录）
 ## 项目结构
 
 ```
-scholaraio/          # Python 包
-  cli.py             # CLI 入口（30 个子命令）
-  mcp_server.py      # MCP 服务器（31 个工具）
-  config.py          # 配置加载（YAML + 路径解析）
-  papers.py          # 论文路径 helper（UUID → 目录映射）
-  ingest/            # PDF 解析 + 元数据流水线
-  index.py           # FTS5 全文检索
-  vectors.py         # Qwen3 语义嵌入 + FAISS + GPU 自适应批处理
-  topics.py          # BERTopic 主题建模
-  loader.py          # L1-L4 分层加载
-  explore.py         # 多维文献探索（OpenAlex + 检索 + 主题建模）
-  workspace.py       # 工作区管理
-  export.py          # BibTeX 导出
-  audit.py           # 数据质量审计
-  sources/           # 数据源适配（local / Endnote / Zotero）
-  metrics.py         # LLM token 用量 + API 计时
-  setup.py           # 环境检测 + 安装向导
+scholaraio/          # Python 包——CLI、MCP 服务器、所有核心模块
+  ingest/            #   PDF 解析 + 元数据提取流水线
+  sources/           #   数据源适配（local / Endnote / Zotero）
 
 .claude/skills/      # 22 个 agent skills（AgentSkills.io 格式）
 .agents/skills/      # ↑ 符号链接，方便跨 agent 发现
 data/papers/         # 你的论文库（不进 git）
 data/inbox/          # 放入 PDF 即可入库
 ```
+
+完整模块参考 → [`CLAUDE.md`](CLAUDE.md) 或 [`AGENTS.md`](AGENTS.md)
 
 ## 引用
 
