@@ -7,9 +7,45 @@ are fully isolated from user data.
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+
+# ---------------------------------------------------------------------------
+# Stub the `mcp` package so modules that import it can be loaded without the
+# real SDK installed.  Set __path__ on each stub so Python treats them as
+# packages (required for sub-package imports like `from mcp.server.fastmcp
+# import FastMCP`).  FastMCP is stubbed as a minimal class whose .tool()
+# returns an identity decorator so decorated functions are preserved.
+# ---------------------------------------------------------------------------
+
+
+class _FakeFastMCP:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def tool(self):
+        def decorator(fn):
+            return fn
+
+        return decorator
+
+    run = MagicMock()
+
+
+_mcp = types.ModuleType("mcp")
+_mcp.__path__ = []  # type: ignore[attr-defined]
+_mcp_server = types.ModuleType("mcp.server")
+_mcp_server.__path__ = []  # type: ignore[attr-defined]
+_mcp_fastmcp = types.ModuleType("mcp.server.fastmcp")
+_mcp_fastmcp.FastMCP = _FakeFastMCP  # type: ignore[attr-defined]
+
+sys.modules["mcp"] = _mcp
+sys.modules["mcp.server"] = _mcp_server
+sys.modules["mcp.server.fastmcp"] = _mcp_fastmcp
 
 
 @pytest.fixture()

@@ -7,22 +7,9 @@ Does NOT test: BERTopic model building, MCP protocol, or external APIs.
 
 from __future__ import annotations
 
-import sys
-import types
-from unittest.mock import MagicMock
-
 import pytest
 
-# Stub the `mcp` package so mcp_server can be imported without the real SDK.
-_mcp_stub = types.ModuleType("mcp")
-_mcp_stub.server = types.ModuleType("mcp.server")
-_mcp_stub.server.fastmcp = types.ModuleType("mcp.server.fastmcp")
-_mcp_stub.server.fastmcp.FastMCP = MagicMock()
-sys.modules["mcp"] = _mcp_stub
-sys.modules["mcp.server"] = _mcp_stub.server
-sys.modules["mcp.server.fastmcp"] = _mcp_stub.server.fastmcp
-
-from scholaraio.mcp_server import _map_nr_topics  # noqa: E402
+from scholaraio.mcp_server import _map_nr_topics
 
 
 class TestBuildTopicsNrTopicsMapping:
