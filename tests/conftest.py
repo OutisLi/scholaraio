@@ -25,7 +25,7 @@ import pytest
 
 try:
     from mcp.server.fastmcp import FastMCP as _  # noqa: F401
-except ImportError:
+except ModuleNotFoundError:
     # Real mcp SDK not installed — inject a minimal stub so modules that
     # import it can be loaded.  The stub is only installed when mcp is
     # genuinely absent, preserving integration behaviour when it is present.
