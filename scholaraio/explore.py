@@ -162,7 +162,7 @@ def _build_filter(
     if year_range:
         parts.append(f"publication_year:{year_range}")
     if min_citations is not None:
-        parts.append(f"cited_by_count:>={min_citations}")
+        parts.append(f"cited_by_count:>{min_citations - 1}")
     if oa_type:
         parts.append(f"type:{oa_type}")
 
@@ -268,6 +268,7 @@ def fetch_explore(
     min_citations: int | None = None,
     oa_type: str | None = None,
     incremental: bool = False,
+    limit: int | None = None,
     cfg: Config | None = None,
 ) -> int:
     """从 OpenAlex 批量拉取论文（支持多维度 filter）。
@@ -288,6 +289,7 @@ def fetch_explore(
         min_citations: 最小引用量过滤。
         oa_type: OpenAlex work type 过滤（article / review 等）。
         incremental: 为 ``True`` 时追加到现有 JSONL，基于 DOI 去重。
+        limit: 最多拉取的论文数量上限（``None`` 表示无限制）。
         cfg: 可选的全局配置。
 
     Returns:
@@ -336,6 +338,8 @@ def fetch_explore(
         try:
             page = 0
             while cursor:
+                if limit is not None and total >= limit:
+                    break
                 page += 1
                 papers, cursor = _fetch_page(
                     filt,
@@ -346,6 +350,8 @@ def fetch_explore(
                 if not papers:
                     break
                 for p in papers:
+                    if limit is not None and total >= limit:
+                        break
                     # Skip duplicates in incremental mode (by DOI or openalex_id)
                     if incremental:
                         pid = p.get("doi", "").lower() or p.get("openalex_id", "")

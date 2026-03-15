@@ -82,6 +82,7 @@ When the main agent delegates paper analysis to a subagent, information flows at
 | `loader.py` | L1-L4 layered loading + enrich_toc + enrich_l3 |
 | `explore.py` | Multi-dimensional literature exploration (OpenAlex multi-filter + keyword + semantic + unified search + topics, isolated in `data/explore/`) |
 | `workspace.py` | Workspace paper subset management (reuses search/export) |
+| `document.py` | Office document inspection (DOCX / PPTX / XLSX structure, layout, overflow detection) |
 | `export.py` | BibTeX export |
 | `audit.py` | Data quality audit + repair |
 | `sources/` | Data source adapters (local / endnote / zotero / arxiv) |
@@ -223,6 +224,8 @@ data/pending/
 
 Note: Theses are auto-ingested (from thesis inbox or LLM classification) and never go to pending.
 
+**Note**: The `missing_md` issue reported by `audit` is a quality problem for already-ingested papers in `data/papers/` (no full-text markdown), unrelated to `data/pending/` status. Pending only holds papers blocked during ingestion (missing DOI or duplicate); `missing_md` means ingested but not yet parsed by MinerU, so full-text search is unavailable.
+
 ### data/explore/ Directory
 
 ```
@@ -279,10 +282,10 @@ Three backend protocols supported: `openai-compat` (DeepSeek / OpenAI / vLLM / O
 
 Skills are defined in `.claude/skills/` directory (also discoverable via `.agents/skills/` symlink), following the [Agent Skills](https://agentskills.io) open standard. Each skill is a folder containing a `SKILL.md` file (YAML frontmatter + instructions).
 
-**Available skills (24):**
+**Available skills (25):**
 
 Knowledge base management:
-- `search` — Literature search (keyword / semantic / author / hybrid retrieval / top-cited ranking)
+- `search` — Literature search (keyword / semantic / author / hybrid retrieval / top-cited ranking / federated cross-source search)
 - `show` — View paper content (L1-L4 layered)
 - `enrich` — Enrich paper content (TOC / conclusion / abstract / citation count)
 - `ingest` — Ingest papers + rebuild indexes (pipeline presets)
@@ -290,7 +293,7 @@ Knowledge base management:
 - `explore` — Multi-dimensional literature exploration (OpenAlex multi-filter + keyword/semantic/unified search + BERTopic)
 - `graph` — Citation graph queries
 - `citations` — Citation count queries and refresh
-- `insights` — Research behavior analysis (search hot keywords / most-read papers / reading trends / semantic neighbor recommendations)
+- `insights` — Research behavior analysis: one command outputs all four sections in a single run: search hot keywords, most-read papers, reading trends, semantic neighbor recommendations (all in one output, no subcommands)
 - `index` — Rebuild keyword / semantic indexes
 - `workspace` — Workspace management (create / add / search / export)
 - `export` — Multi-format export (BibTeX / RIS / Markdown reference list / DOCX)
@@ -306,8 +309,9 @@ Academic writing:
 - `review-response` — Review response (point-by-point analysis + evidence search + rebuttal)
 - `research-gap` — Research gap identification (multi-dimensional analysis + open question discovery)
 
-Visualization:
+Visualization & document generation:
 - `draw` — Drawing (Mermaid structured diagrams + cli-anything-inkscape vector graphics)
+- `document` — Office document generation & inspection (python-docx / python-pptx / openpyxl, direct API calls to build DOCX / PPTX / XLSX + `document inspect` for structure verification)
 
 System maintenance:
 - `setup` — Environment detection and setup wizard

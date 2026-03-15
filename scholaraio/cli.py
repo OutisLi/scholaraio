@@ -998,6 +998,7 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
             min_citations=getattr(args, "min_citations", None),
             oa_type=getattr(args, "oa_type", None),
             incremental=getattr(args, "incremental", False),
+            limit=getattr(args, "limit", None),
             cfg=cfg,
         )
         ui(f"\nFetched {total} papers")
@@ -1286,6 +1287,31 @@ def _cmd_export_markdown(args: argparse.Namespace, cfg) -> None:
         ui(f"已导出到 {out}（{count} 条引用，{style} 格式）")
     else:
         print(md)
+
+
+def cmd_document(args: argparse.Namespace, cfg) -> None:
+    action = getattr(args, "doc_action", None)
+    if action == "inspect":
+        _cmd_document_inspect(args, cfg)
+    else:
+        _log.error("请指定 document 子命令: inspect")
+        sys.exit(1)
+
+
+def _cmd_document_inspect(args: argparse.Namespace, cfg) -> None:
+    from scholaraio.document import inspect
+
+    file_path = Path(args.file)
+    if not file_path.exists():
+        _log.error("文件不存在: %s", file_path)
+        sys.exit(1)
+    fmt = getattr(args, "format", None)
+    try:
+        result = inspect(file_path, fmt=fmt)
+    except (ValueError, ImportError) as e:
+        _log.error("%s", e)
+        sys.exit(1)
+    print(result)
 
 
 def cmd_style(args: argparse.Namespace, cfg) -> None:
@@ -2247,6 +2273,18 @@ def cmd_attach_pdf(args: argparse.Namespace, cfg) -> None:
         sys.exit(1)
 
     existing_md = paper_d / "paper.md"
+    dry_run = getattr(args, "dry_run", False)
+
+    if dry_run:
+        ui(f"[dry-run] 论文目录: {paper_d}")
+        ui(f"[dry-run] PDF 来源: {pdf_path}")
+        ui(f"[dry-run] 目标 paper.md: {paper_d / 'paper.md'}")
+        if existing_md.exists():
+            ui("[dry-run] 警告：已有 paper.md，实际运行时将被覆盖")
+        ui("[dry-run] 将执行: MinerU 转换 → 摘要补全 → 重新嵌入 → 重建索引")
+        ui("[dry-run] 如确认无误，去掉 --dry-run 参数再运行")
+        return
+
     if existing_md.exists():
         ui(f"警告：{paper_d.name} 已有 paper.md，将被覆盖")
 
@@ -2604,6 +2642,7 @@ def main() -> None:
     p_ef.add_argument("--name", help="探索库名称（默认从 filter 推导）")
     p_ef.add_argument("--year-range", help="年份过滤（如 2020-2025）")
     p_ef.add_argument("--incremental", action="store_true", help="增量更新（追加新论文）")
+    p_ef.add_argument("--limit", type=int, default=None, help="最多拉取的论文数量上限（不设则无限）")
 
     p_ee = p_explore_sub.add_parser("embed", help="为探索库生成语义向量")
     p_ee.add_argument("--name", required=True, help="探索库名称")
@@ -2739,6 +2778,7 @@ def main() -> None:
     p_ap.set_defaults(func=cmd_attach_pdf)
     p_ap.add_argument("paper_id", help="论文 ID（目录名 / UUID / DOI）")
     p_ap.add_argument("pdf_path", help="PDF 文件路径")
+    p_ap.add_argument("--dry-run", action="store_true", help="预览将要执行的操作，不实际运行")
 
     # --- setup ---
     p_setup = sub.add_parser("setup", help="环境检测与安装向导 / Setup wizard")
@@ -2789,6 +2829,20 @@ def main() -> None:
 
     p_style_show = p_style_sub.add_parser("show", help="查看引用格式的格式化函数代码")
     p_style_show.add_argument("name", help="格式名称，如 jcp / apa / vancouver")
+
+    # --- document ---
+    p_doc = sub.add_parser("document", help="Office 文档工具（inspect 等）")
+    p_doc.set_defaults(func=cmd_document)
+    p_doc_sub = p_doc.add_subparsers(dest="doc_action", required=True)
+
+    p_doc_inspect = p_doc_sub.add_parser("inspect", help="检查 Office 文档结构（DOCX / PPTX / XLSX）")
+    p_doc_inspect.add_argument("file", help="文件路径")
+    p_doc_inspect.add_argument(
+        "--format",
+        choices=["docx", "pptx", "xlsx"],
+        default=None,
+        help="文件格式（默认从扩展名推断）",
+    )
 
     # --- enrich-l3 ---
     p_l3 = sub.add_parser("enrich-l3", help="LLM 提取结论段写入 JSON")

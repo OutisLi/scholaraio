@@ -12,7 +12,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![MCP Tools](https://img.shields.io/badge/MCP_Tools-32-green.svg)](scholaraio/mcp_server.py)
-[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-24-purple.svg)](.claude/skills/)
+[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-25-purple.svg)](.claude/skills/)
 
 </div>
 
@@ -207,7 +207,7 @@ scholaraio/          # Python 包——CLI、MCP 服务器、所有核心模块
   ingest/            #   PDF 解析 + 元数据提取流水线
   sources/           #   数据源适配（local / Endnote / Zotero）
 
-.claude/skills/      # 24 个 agent skills（AgentSkills.io 格式）
+.claude/skills/      # 25 个 agent skills（AgentSkills.io 格式）
 .agents/skills/      # ↑ 符号链接，方便跨 agent 发现
 data/papers/         # 你的论文库（不进 git）
 data/inbox/          # 放入 PDF 即可入库

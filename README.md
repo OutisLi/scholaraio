@@ -12,7 +12,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![MCP Tools](https://img.shields.io/badge/MCP_Tools-32-green.svg)](scholaraio/mcp_server.py)
-[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-24-purple.svg)](.claude/skills/)
+[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-25-purple.svg)](.claude/skills/)
 
 </div>
 
@@ -207,7 +207,7 @@ scholaraio/          # Python package — CLI, MCP server, and all core modules
   ingest/            #   PDF parsing + metadata extraction pipeline
   sources/           #   Data source adapters (local / Endnote / Zotero)
 
-.claude/skills/      # 24 agent skills (AgentSkills.io format)
+.claude/skills/      # 25 agent skills (AgentSkills.io format)
 .agents/skills/      # ↑ symlink for cross-agent discovery
 data/papers/         # Your paper library (gitignored)
 data/inbox/          # Drop PDFs here for ingestion

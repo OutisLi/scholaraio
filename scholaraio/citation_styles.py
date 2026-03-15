@@ -146,16 +146,16 @@ def _fmt_chicago_author_date(meta: dict, idx: int | None = None) -> str:
             return f"{last}, {given}" if first else f"{given} {last}"
         return name
 
-    if len(authors) == 1:
+    if not authors:
+        author_str = "Unknown"
+    elif len(authors) == 1:
         author_str = _chicago_author(authors[0], first=True)
     elif len(authors) <= 3:
         formatted = [_chicago_author(authors[0], first=True)]
         formatted += [_chicago_author(a, first=False) for a in authors[1:]]
         author_str = ", ".join(formatted[:-1]) + f", and {formatted[-1]}"
-    elif authors:
-        author_str = _chicago_author(authors[0], first=True).rstrip(".") + " et al."
     else:
-        author_str = "Unknown"
+        author_str = _chicago_author(authors[0], first=True).rstrip(".") + " et al."
 
     year = meta.get("year") or "n.d."
     title = meta.get("title") or "Untitled"
