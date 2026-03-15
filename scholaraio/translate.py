@@ -84,18 +84,24 @@ def detect_language(text: str) -> str:
 #  Chunking (preserve markdown structure)
 # ============================================================================
 
-# Patterns for blocks that should NOT be translated
-_CODE_BLOCK_RE = re.compile(r"(```[\s\S]*?```)", re.MULTILINE)
-_DISPLAY_MATH_RE = re.compile(r"(\$\$[\s\S]*?\$\$)", re.MULTILINE)
-_IMAGE_RE = re.compile(r"(!\[.*?\]\(.*?\))")
+# Patterns for blocks that should NOT be translated (protected blocks)
+_CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```", re.MULTILINE)
+_DISPLAY_MATH_RE = re.compile(r"\$\$[\s\S]*?\$\$", re.MULTILINE)
+_IMAGE_RE = re.compile(r"!\[.*?\]\(.*?\)")
+
+# Combined pattern for all protected blocks
+_PROTECTED_RE = re.compile(
+    r"(```[\s\S]*?```|\$\$[\s\S]*?\$\$|!\[.*?\]\(.*?\))",
+    re.MULTILINE,
+)
 
 
 def _split_into_chunks(text: str, chunk_size: int) -> list[str]:
     """Split markdown text into translatable chunks respecting structure.
 
-    Splits on paragraph boundaries (double newlines) and tries to keep
-    chunks under ``chunk_size`` characters. Code blocks and display math
-    are kept intact within their chunks.
+    Protected blocks (code blocks, display math, images) are replaced with
+    placeholders before splitting to prevent them from being broken across
+    chunks. After splitting, placeholders are restored.
 
     Args:
         text: Full markdown text.
@@ -104,7 +110,18 @@ def _split_into_chunks(text: str, chunk_size: int) -> list[str]:
     Returns:
         List of text chunks.
     """
-    paragraphs = re.split(r"\n{2,}", text)
+    # Extract protected blocks and replace with placeholders
+    protected: list[str] = []
+
+    def _replace(m: re.Match) -> str:
+        idx = len(protected)
+        protected.append(m.group(0))
+        return f"\x00PROTECTED_{idx}\x00"
+
+    safe_text = _PROTECTED_RE.sub(_replace, text)
+
+    # Split on paragraph boundaries
+    paragraphs = re.split(r"\n{2,}", safe_text)
     chunks: list[str] = []
     current: list[str] = []
     current_len = 0
@@ -121,7 +138,13 @@ def _split_into_chunks(text: str, chunk_size: int) -> list[str]:
     if current:
         chunks.append("\n\n".join(current))
 
-    return chunks
+    # Restore protected blocks in each chunk
+    def _restore(chunk: str) -> str:
+        for i, block in enumerate(protected):
+            chunk = chunk.replace(f"\x00PROTECTED_{i}\x00", block)
+        return chunk
+
+    return [_restore(c) for c in chunks]
 
 
 # ============================================================================
@@ -135,7 +158,7 @@ _TRANSLATE_PROMPT = """\
 - 保留所有 markdown 格式（#, **, ``, [links]、表格等）
 - 保留 LaTeX 公式（$...$, $$...$$）不翻译
 - 保留代码块（```...```）不翻译
-- 保留图片引用（![...](...））不翻译
+- 保留图片引用（![...](...)）不翻译
 - 保留作者姓名和引用格式（如 [Smith et al., 2023]）
 - 对于专业术语，在首次出现时用「英文 (中文翻译)」格式
 - 只返回翻译文本，不要任何解释
@@ -160,7 +183,13 @@ def _translate_chunk(text: str, target_lang: str, config: Config, timeout: int |
 
     lang_name = _LANG_NAMES.get(target_lang, target_lang)
     prompt = _TRANSLATE_PROMPT.format(target_lang=lang_name, text=text)
-    result = call_llm(prompt, config, timeout=timeout or config.llm.timeout_clean, purpose="translate")
+    result = call_llm(
+        prompt,
+        config,
+        json_mode=False,
+        timeout=timeout or config.llm.timeout_clean,
+        purpose="translate",
+    )
     return result.content.strip()
 
 
@@ -273,8 +302,8 @@ def batch_translate(
                 meta = read_meta(d)
                 if meta.get("id") in paper_ids:
                     filtered.append(d)
-            except Exception:
-                pass
+            except Exception as e:
+                _log.debug("failed to read meta for %s: %s", d.name, e)
         dirs = filtered
 
     def _do_one(pdir: Path) -> str:

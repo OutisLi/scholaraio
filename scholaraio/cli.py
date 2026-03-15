@@ -730,10 +730,6 @@ def cmd_translate(args: argparse.Namespace, cfg) -> None:
     # Determine target language: CLI flag > config default
     target_lang = args.lang or cfg.translate.target_lang
 
-    # Determine auto behavior: CLI override > config default
-    # --translate / --no-translate override config.translate.auto_translate
-    # When neither is set, use config default for batch, always translate for single paper
-
     if args.paper_id:
         paper_d = _resolve_paper(args.paper_id, cfg)
         result = translate_paper(paper_d, cfg, target_lang=target_lang, force=args.force)

@@ -74,9 +74,11 @@ class PaperMetadata:
 
 DOI_CORE = r'10\.\d{4,9}/[^\s,;)\]>"\'}]+'
 
-# Patent publication number patterns (CN/US/EP/WO/JP/KR/DE/FR/GB)
-# Requires ≥7 digits to avoid false positives (real patents: CN 9+, US 7+, EP 7+)
-PATENT_NUMBER_RE = re.compile(r"\b((?:CN|US|EP|WO|JP|KR|DE|FR|GB)\d{7,}[A-Z]\d?)\b")
+# Patent publication number patterns
+# Supported offices: CN/US/EP/WO/JP/KR/DE/FR/GB/TW/IN/AU/CA/RU/BR
+# TWI format (Taiwan invention): TWI followed by 6+ digits (e.g. TWI694356B)
+# Requires ≥6 digits to cover TW patents; other offices typically 7+
+PATENT_NUMBER_RE = re.compile(r"\b((?:CN|US|EP|WO|JP|KR|DE|FR|GB|TW|TWI|IN|AU|CA|RU|BR)\d{6,}[A-Z]\d?)\b")
 
 # H1 headings that are NOT paper titles
 NON_TITLE_H1 = [

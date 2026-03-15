@@ -139,10 +139,6 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
             conn.execute(_REGISTRY_DOI_INDEX)
         except sqlite3.OperationalError:
             pass  # index already exists
-        try:
-            conn.execute(_REGISTRY_PUBNUM_INDEX)
-        except sqlite3.OperationalError:
-            pass
         # Migrate: add publication_number column if missing (pre-existing DB)
         try:
             conn.execute("SELECT publication_number FROM papers_registry LIMIT 0")
@@ -151,6 +147,10 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
                 conn.execute("ALTER TABLE papers_registry ADD COLUMN publication_number TEXT")
             except sqlite3.OperationalError:
                 pass
+        try:
+            conn.execute(_REGISTRY_PUBNUM_INDEX)
+        except sqlite3.OperationalError:
+            pass
         try:
             conn.execute(_CITATIONS_IDX_TARGET_DOI)
         except sqlite3.OperationalError:
@@ -561,9 +561,11 @@ def lookup_paper(db_path: Path, user_input: str) -> dict | None:
         row = conn.execute("SELECT * FROM papers_registry WHERE doi = ?", (user_input,)).fetchone()
         if row:
             return dict(row)
-        # Try patent publication number
+        # Try patent publication number (normalize to uppercase)
         try:
-            row = conn.execute("SELECT * FROM papers_registry WHERE publication_number = ?", (user_input,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM papers_registry WHERE publication_number = ?", (user_input.upper().strip(),)
+            ).fetchone()
             if row:
                 return dict(row)
         except sqlite3.OperationalError:

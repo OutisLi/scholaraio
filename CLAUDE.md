@@ -197,7 +197,7 @@ data/inbox-patent/
 └── patent.pdf    # 专利 PDF（自动提取公开号，按公开号去重，标记 patent）
 ```
 
-注：支持的公开号格式：CN/US/EP/WO/JP/KR/DE/FR/GB + 7位以上数字 + 类型码（如 CN112345678A、US10123456B2）。
+注：支持的公开号格式：CN/US/EP/WO/JP/KR/DE/FR/GB/TW/TWI/IN/AU/CA/RU/BR + 6位以上数字 + 类型码（如 CN112345678A、US10123456B2、TWI694356B）。
 
 ### data/inbox-doc/ 目录
 

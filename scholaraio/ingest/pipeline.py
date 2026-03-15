@@ -365,10 +365,19 @@ def step_dedup(ctx: InboxCtx) -> StepResult:
     if ctx.is_patent:
         ctx.meta.paper_type = "patent"
         _log.debug("patent inbox, skipping API query")
-        ui(f"Patent: {ctx.meta.title or '?'}")
+        ui(f"专利: {ctx.meta.title or '?'}")
         # Patent publication number dedup
         pub_num = (ctx.meta.publication_number or "").upper().strip()
-        if pub_num and ctx.existing_pub_nums and pub_num in ctx.existing_pub_nums:
+        if not pub_num:
+            _log.warning("patent inbox but no publication number extracted: %s", ctx.meta.title or "?")
+            _move_to_pending(
+                ctx,
+                issue="no_pub_num",
+                message="专利 inbox 未提取到公开号，需人工确认",
+            )
+            ctx.status = "needs_review"
+            return StepResult.FAIL
+        if ctx.existing_pub_nums and pub_num in ctx.existing_pub_nums:
             existing_json = ctx.existing_pub_nums[pub_num]
             _log.debug("duplicate patent: %s -> %s", pub_num, existing_json.parent.name)
             _move_to_pending(
@@ -411,18 +420,18 @@ def step_dedup(ctx: InboxCtx) -> StepResult:
                 )
                 ctx.status = "duplicate"
                 return StepResult.FAIL
-            ui("Detected as patent, ingesting without DOI")
+            ui("检测为专利，无 DOI 直接入库")
             return StepResult.OK
         # No DOI -> LLM thesis detection
         if _detect_thesis(ctx):
             ctx.meta.paper_type = "thesis"
             ctx.is_thesis = True
-            ui("Detected as thesis, ingesting without DOI")
+            ui("检测为学位论文，无 DOI 直接入库")
             return StepResult.OK
         # No DOI -> LLM book detection
         if _detect_book(ctx):
             ctx.meta.paper_type = "book"
-            ui("Detected as book, ingesting without DOI")
+            ui("检测为书籍，无 DOI 直接入库")
             return StepResult.OK
         # Not thesis/book/patent -> move to pending
         _log.debug("no DOI and not thesis/book/patent, moving to pending")
@@ -656,7 +665,7 @@ def step_translate(json_path: Path, cfg: Config, opts: dict) -> StepResult:
     result = translate_paper(paper_d, cfg, target_lang=target_lang, force=force)
     if result is None:
         return StepResult.SKIP
-    ui(f"  translated: {result.name}")
+    ui(f"  已翻译: {result.name}")
     return StepResult.OK
 
 
@@ -1572,7 +1581,8 @@ def _collect_existing_ids(papers_dir: Path) -> tuple[dict[str, Path], dict[str, 
     """Collect existing DOIs and patent publication numbers for dedup.
 
     Returns:
-        (dois, pub_nums) — both map lowercase key → json_path.
+        (dois, pub_nums) — dois maps lowercase DOI → json_path,
+        pub_nums maps uppercase publication number → json_path.
     """
     from scholaraio.papers import iter_paper_dirs
 
@@ -1945,6 +1955,11 @@ def _update_registry(cfg, meta, dir_name: str) -> None:
         return
     try:
         with sqlite3.connect(db_path) as conn:
+            # Ensure publication_number column exists (old DB migration)
+            try:
+                conn.execute("SELECT publication_number FROM papers_registry LIMIT 0")
+            except sqlite3.OperationalError:
+                conn.execute("ALTER TABLE papers_registry ADD COLUMN publication_number TEXT")
             pub_num = getattr(meta, "publication_number", "") or ""
             conn.execute(
                 """INSERT OR REPLACE INTO papers_registry

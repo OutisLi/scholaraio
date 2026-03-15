@@ -48,7 +48,7 @@ scholaraio pipeline <preset>
    - **依赖**：需安装 `pip install 'markitdown[docx,pptx,xlsx]'`
 
 5. 专利文献处理逻辑（`data/inbox-patent/`）：
-   - 自动提取公开号（CN/US/EP/WO/JP/KR/DE/FR/GB 格式）
+   - 自动提取公开号（CN/US/EP/WO/JP/KR/DE/FR/GB/TW/IN/AU 等格式）
    - 按公开号去重（非 DOI），跳过 DOI 检查
    - 自动标记 `paper_type: patent`
 

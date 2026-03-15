@@ -198,7 +198,7 @@ data/inbox-patent/
 └── patent.pdf    # Patent PDF (auto-extracts publication number, dedup by publication number, tagged patent)
 ```
 
-Note: Supported publication number formats: CN/US/EP/WO/JP/KR/DE/FR/GB + 7+ digits + type code (e.g. CN112345678A, US10123456B2).
+Note: Supported publication number formats: CN/US/EP/WO/JP/KR/DE/FR/GB/TW/TWI/IN/AU/CA/RU/BR + 6+ digits + type code (e.g. CN112345678A, US10123456B2, TWI694356B).
 
 ### data/inbox-doc/ Directory
 
