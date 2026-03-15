@@ -1502,6 +1502,10 @@ def federated_search(
                 from scholaraio.explore import list_explore_libs
 
                 names = list_explore_libs(cfg)
+                if not names:
+                    output["explore:*"] = [
+                        {"error": "no_explore_libs", "message": "No explore libraries found. Run: scholaraio explore fetch --name <name>"}
+                    ]
             else:
                 names = [explore_name]
             for name in names:

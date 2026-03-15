@@ -1449,7 +1449,7 @@ def _query_dois_for_set(cfg, doi_set: list[str]) -> set[str]:
 
 def cmd_fsearch(args: argparse.Namespace, cfg) -> None:
     query = " ".join(args.query)
-    top_k = args.top or 10
+    top_k = _resolve_top(args, 10)
     scope_str = args.scope or "main"
     scopes = [s.strip() for s in scope_str.split(",") if s.strip()] or ["main"]
 
@@ -1483,6 +1483,10 @@ def cmd_fsearch(args: argparse.Namespace, cfg) -> None:
                 from scholaraio.explore import list_explore_libs
 
                 names = list_explore_libs(cfg)
+                if not names:
+                    ui("── [explore: *] ──")
+                    ui("  暂无 explore 库，请先运行 scholaraio explore fetch --name <名称>")
+                    ui()
             else:
                 names = [explore_name]
 
@@ -1721,7 +1725,10 @@ def cmd_insights(args: argparse.Namespace, cfg) -> None:
     if not recent_paper_ids:
         ui("  过去7天无阅读记录，无法推荐")
     else:
-        all_read_pids = {ev["name"] for ev in read_events if ev.get("name")}
+        # Use all-time read history so papers read outside the current window
+        # are not mistakenly recommended as "not yet read".
+        all_time_reads = store.query(category="read", limit=100000)
+        all_read_pids = {ev["name"] for ev in all_time_reads if ev.get("name")}
         try:
             from scholaraio.vectors import vsearch
 
