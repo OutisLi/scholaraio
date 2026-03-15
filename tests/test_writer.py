@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
-import pytest
 
 from scholaraio.ingest.metadata._models import PaperMetadata
 from scholaraio.ingest.metadata._writer import (

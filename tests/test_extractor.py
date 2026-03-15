@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
-from scholaraio.ingest.extractor import RegexExtractor, _clean_llm_str, get_extractor
 from scholaraio.config import _build_config
+from scholaraio.ingest.extractor import RegexExtractor, _clean_llm_str, get_extractor
 
 
 class TestCleanLLMStr:
@@ -40,10 +36,7 @@ class TestRegexExtractor:
     def test_extract_returns_metadata(self, tmp_path):
         md = tmp_path / "paper.md"
         md.write_text(
-            "# Test Paper Title\n\n"
-            "John Smith\n\n"
-            "DOI: 10.1234/test.2023\n\n"
-            "Copyright © 2023\n",
+            "# Test Paper Title\n\nJohn Smith\n\nDOI: 10.1234/test.2023\n\nCopyright © 2023\n",
             encoding="utf-8",
         )
         ext = RegexExtractor()

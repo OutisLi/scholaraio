@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
 from scholaraio.ingest.metadata._extract import (
     _clean_author_name,
     _clean_author_text,
@@ -52,13 +48,13 @@ class TestExtractTitle:
             "# John Smith<sup>1</sup>",
             "# A Long Title About Turbulence Modeling Methods",
         ]
-        title, idx = _extract_title(lines)
+        title, _idx = _extract_title(lines)
         assert "Turbulence" in title
 
     def test_fallback_longest_h1(self):
         """When all H1s are skipped, pick the longest."""
         lines = ["# 1 Intro", "# Keywords"]
-        title, idx = _extract_title(lines)
+        title, _idx = _extract_title(lines)
         # Both are "skippable", so fallback picks longest
         assert title != ""
 

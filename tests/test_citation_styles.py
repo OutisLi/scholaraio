@@ -209,9 +209,7 @@ class TestGetFormatter:
     def test_custom_style(self, cfg):
         sd = styles_dir(cfg)
         sd.mkdir(parents=True)
-        (sd / "test_style.py").write_text(
-            "def format_ref(meta, idx=None): return f'{idx}. custom'"
-        )
+        (sd / "test_style.py").write_text("def format_ref(meta, idx=None): return f'{idx}. custom'")
         f = get_formatter("test_style", cfg)
         assert f({}, 1) == "1. custom"
 

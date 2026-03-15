@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
-import pytest
-
-from scholaraio.config import Config, _build_config, _deep_merge, load_config
+from scholaraio.config import _build_config, _deep_merge, load_config
 
 
 class TestDeepMerge:

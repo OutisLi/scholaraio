@@ -160,9 +160,8 @@ class TestTimer:
 
     def test_timer_records_error(self, tmp_path):
         s = init(tmp_path / "m.db", "s")
-        with pytest.raises(ValueError):
-            with timer("fail-op"):
-                raise ValueError("boom")
+        with pytest.raises(ValueError), timer("fail-op"):
+            raise ValueError("boom")
         events = s.query(category="step")
         assert events[0]["status"] == "error"
 
