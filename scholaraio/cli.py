@@ -1696,7 +1696,10 @@ def cmd_insights(args: argparse.Namespace, cfg) -> None:
         ui("暂无足够数据（metrics 未初始化）")
         return
 
-    days = args.days or 30
+    days = args.days
+    if days <= 0:
+        ui("--days 必须为正整数")
+        return
     since_dt = datetime.now(timezone.utc) - timedelta(days=days)
     since_iso = since_dt.isoformat()
 
@@ -1914,6 +1917,29 @@ def cmd_insights(args: argparse.Namespace, cfg) -> None:
                 ui("  未找到合适的邻近论文（可能向量索引未建立）")
         except ImportError:
             ui("  语义搜索不可用（需安装 embed 依赖）")
+    ui()
+
+    # 5. Active workspaces — list workspaces with paper counts
+    ui("【活跃工作区】")
+    try:
+        import json as _json2
+
+        from scholaraio.workspace import list_workspaces
+
+        ws_root = cfg._root / "workspace"
+        ws_names = list_workspaces(ws_root)
+        if ws_names:
+            for ws_name in ws_names:
+                papers_json = ws_root / ws_name / "papers.json"
+                try:
+                    count = len(_json2.loads(papers_json.read_text("utf-8")))
+                except Exception:
+                    count = 0
+                ui(f"  {ws_name:<30s} {count} 篇论文")
+        else:
+            ui("  暂无工作区")
+    except Exception:
+        ui("  工作区信息不可用")
     ui()
 
 
