@@ -1,8 +1,11 @@
 ---
 name: rename
 description: Rename paper directories to standardized Author-Year-Title format based on JSON metadata. Use when the user wants to normalize filenames after metadata corrections.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "papers", "metadata", "filenames"]
 ---
-
 # 重命名论文文件
 
 根据 JSON 元数据规范化论文文件名（`Author-Year-Title` 格式）。

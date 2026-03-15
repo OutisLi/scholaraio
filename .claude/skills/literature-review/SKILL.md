@@ -1,8 +1,11 @@
 ---
 name: literature-review
 description: Write a literature review based on papers in a workspace. Covers topic organization, narrative structure, gap identification, and BibTeX export. Use when the user wants to draft a literature review, survey a research area, or summarize the state of the art.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "writing", "literature-review", "survey"]
 ---
-
 # 文献综述写作
 
 基于工作区中的论文，撰写结构化的文献综述。

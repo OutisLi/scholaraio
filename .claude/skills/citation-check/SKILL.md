@@ -1,8 +1,11 @@
 ---
 name: citation-check
 description: Verify citations in AI-generated or human-written text against the local knowledge base and external APIs. Catches hallucinated references, wrong metadata, and missing papers. Use when the user wants to check if citations are real and accurate.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "citations", "verification", "hallucination"]
 ---
-
 # 引用验证
 
 检查文本中的引用是否真实、准确，防止 AI 幻觉引用和元数据错误。

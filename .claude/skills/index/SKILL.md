@@ -1,8 +1,11 @@
 ---
 name: index
 description: Rebuild FTS5 full-text search index or FAISS semantic vector index. Use when the user wants to update or rebuild search indexes after metadata changes.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "search", "indexing", "fts5"]
 ---
-
 # 重建索引
 
 重建 FTS5 全文检索索引或 FAISS 语义向量索引。

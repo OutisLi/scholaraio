@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS events (
 _CREATE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);",
     "CREATE INDEX IF NOT EXISTS idx_events_category ON events(category);",
+    "CREATE INDEX IF NOT EXISTS idx_events_cat_name ON events(category, name);",
 ]
 
 
@@ -215,6 +216,28 @@ class MetricsStore:
             cur = self._conn.execute(sql, params)
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+    def query_distinct_names(self, category: str) -> set[str]:
+        """Return all distinct event names ever recorded for a category.
+
+        Unlike :meth:`query`, this issues a ``SELECT DISTINCT`` projection
+        rather than paginating full rows, so memory usage scales with the
+        number of *unique* names rather than total event count.  A composite
+        ``(category, name)`` index makes the scan efficient for typical
+        library sizes.
+
+        Args:
+            category: Event category to filter on (e.g. ``"read"``).
+
+        Returns:
+            Set of distinct ``name`` values (empty strings excluded).
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT DISTINCT name FROM events WHERE category = ? AND name IS NOT NULL AND name != ''",
+                (category,),
+            )
+            return {row[0] for row in cur.fetchall()}
 
     def summary(self, session_id: str | None = None) -> dict:
         """汇总 LLM token 用量。

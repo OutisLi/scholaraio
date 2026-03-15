@@ -1,8 +1,11 @@
 ---
 name: graph
 description: Query citation graphs — view a paper's references, find which papers cite it, and analyze shared references between multiple papers. Use when the user asks about citation relationships, reference overlap, or bibliographic connections.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "citations", "graph", "references"]
 ---
-
 # 引用图谱查询
 
 查看论文的参考文献、谁引用了此论文、以及多篇论文的共同参考文献。

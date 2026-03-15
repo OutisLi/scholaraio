@@ -1,8 +1,11 @@
 ---
 name: search
 description: Search academic papers in the local ScholarAIO knowledge base. Supports unified search (keyword + semantic fusion), keyword-only (FTS5), semantic-only (FAISS), author search, and top-cited ranking. Use when the user wants to find papers, look up literature, search by author, or explore research topics.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "search", "papers", "semantic", "fts5"]
 ---
-
 # 文献搜索
 
 在本地论文库中搜索文献。默认使用融合检索（关键词 + 语义向量合并排序），也支持单独使用某一种模式。

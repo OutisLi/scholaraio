@@ -1,8 +1,11 @@
 ---
 name: paper-writing
 description: Assist with writing sections of a research paper (Introduction, Related Work, Method, Results, Discussion, Conclusion). Leverages workspace papers for citations and evidence. Use when the user wants help drafting or revising specific paper sections.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "writing", "research", "sections"]
 ---
-
 # 论文写作辅助
 
 协助用户撰写研究论文的各个章节，基于工作区中的文献提供引用支持。

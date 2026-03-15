@@ -1,0 +1,107 @@
+publisher: ZimoLiao
+repo: ZimoLiao/scholaraio
+description: "Academic research skills for AI agents — literature search, paper analysis, citation management, academic writing, and more. Built for ScholarAIO."
+keywords:
+  - academic
+  - research
+  - literature
+  - citations
+  - papers
+  - scholarship
+  - literature-review
+  - systematic-review
+  - bibtex
+  - semantic-search
+
+skills:
+  - name: scholaraio/search
+    path: .claude/skills/search
+    description: "Search academic papers with hybrid keyword+semantic fusion (FTS5 + FAISS RRF)"
+
+  - name: scholaraio/show
+    path: .claude/skills/show
+    description: "View paper content at any depth: metadata, abstract, conclusion, or full text (L1-L4)"
+
+  - name: scholaraio/ingest
+    path: .claude/skills/ingest
+    description: "Ingest papers from inbox into the knowledge base via MinerU PDF pipeline"
+
+  - name: scholaraio/enrich
+    path: .claude/skills/enrich
+    description: "Enrich paper metadata with LLM: extract TOC, conclusions (L3), backfill abstracts"
+
+  - name: scholaraio/index
+    path: .claude/skills/index
+    description: "Rebuild FTS5 full-text search index or FAISS semantic vector index"
+
+  - name: scholaraio/topics
+    path: .claude/skills/topics
+    description: "Explore topic distribution using BERTopic clustering; merge topics and generate HTML visualizations"
+
+  - name: scholaraio/explore
+    path: .claude/skills/explore
+    description: "Explore literature by fetching papers from OpenAlex with multi-dimensional filters"
+
+  - name: scholaraio/graph
+    path: .claude/skills/graph
+    description: "Query citation graphs — references, citing papers, shared references"
+
+  - name: scholaraio/citations
+    path: .claude/skills/citations
+    description: "View top-cited papers ranking and refetch citation counts from APIs"
+
+  - name: scholaraio/export
+    path: .claude/skills/export
+    description: "Export papers from the knowledge base to BibTeX format"
+
+  - name: scholaraio/import
+    path: .claude/skills/import
+    description: "Import papers from Endnote XML/RIS or Zotero (Web API or local SQLite)"
+
+  - name: scholaraio/workspace
+    path: .claude/skills/workspace
+    description: "Manage workspace paper subsets — create, add/remove papers, search, export BibTeX"
+
+  - name: scholaraio/rename
+    path: .claude/skills/rename
+    description: "Rename paper directories to standardized Author-Year-Title format"
+
+  - name: scholaraio/audit
+    path: .claude/skills/audit
+    description: "Audit paper data quality: missing fields, filename issues, DOI duplicates, LLM deep diagnosis"
+
+  - name: scholaraio/literature-review
+    path: .claude/skills/literature-review
+    description: "Write a literature review based on workspace papers: topic organization, narrative, gap identification"
+
+  - name: scholaraio/paper-writing
+    path: .claude/skills/paper-writing
+    description: "Assist writing research paper sections (Intro, Related Work, Method, Results, Discussion, Conclusion)"
+
+  - name: scholaraio/citation-check
+    path: .claude/skills/citation-check
+    description: "Verify citations in AI-generated text against local knowledge base and external APIs"
+
+  - name: scholaraio/writing-polish
+    path: .claude/skills/writing-polish
+    description: "Polish academic writing — remove AI patterns, improve clarity, match target journal style"
+
+  - name: scholaraio/review-response
+    path: .claude/skills/review-response
+    description: "Draft point-by-point responses to peer review comments with evidence from workspace papers"
+
+  - name: scholaraio/research-gap
+    path: .claude/skills/research-gap
+    description: "Identify research gaps and open questions from literature in a workspace"
+
+  - name: scholaraio/metrics
+    path: .claude/skills/metrics
+    description: "View LLM token usage, API call timing, and runtime metrics"
+
+  - name: scholaraio/insights
+    path: .claude/skills/insights
+    description: "Analyze research behavior: search hot keywords, most-read papers, reading trends, and semantic neighbor recommendations"
+
+  - name: scholaraio/setup
+    path: .claude/skills/setup
+    description: "Initialize and diagnose the ScholarAIO environment; bilingual EN/ZH setup wizard"

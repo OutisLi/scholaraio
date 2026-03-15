@@ -1,8 +1,11 @@
 ---
 name: ingest
 description: Ingest papers and documents from inbox into the knowledge base. Runs the pipeline to convert PDFs via MinerU (auto-splits long PDFs), Office files (DOCX/XLSX/PPTX) via MarkItDown, extract metadata, deduplicate by DOI, and build indexes. Supports three inboxes - regular papers, theses, and general documents. Use when the user has new papers or documents to process, wants to run the pipeline, or rebuild indexes.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "papers", "pipeline", "pdf", "docx", "office"]
 ---
-
 # 入库文档
 
 将 inbox 中的 PDF、Office 文档（DOCX/XLSX/PPTX）或 Markdown 文件处理入库。

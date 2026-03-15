@@ -1459,6 +1459,119 @@ def rename_paper(
 
 
 # ============================================================================
+#  federated_search
+# ============================================================================
+
+
+@mcp.tool()
+def federated_search(
+    query: str,
+    scope: str = "main",
+    top_k: int = 10,
+) -> str:
+    """Search across multiple sources: main library, explore silos, and arXiv.
+
+    Args:
+        query: Search query text.
+        scope: Comma-separated list of sources: main / explore:NAME / explore:* / arxiv.
+        top_k: Maximum results per source (default 10).
+    """
+    import sqlite3
+
+    cfg = _get_cfg()
+    scopes = [s.strip() for s in scope.split(",") if s.strip()] or ["main"]
+    output: dict[str, list[dict]] = {}
+
+    for src in scopes:
+        if src == "main":
+            if not Path(cfg.index_db).exists():
+                output["main"] = [{"error": "index_not_found", "message": "Index not built. Run: scholaraio index"}]
+            else:
+                try:
+                    from scholaraio.index import unified_search
+
+                    results = unified_search(query, cfg.index_db, top_k=top_k, cfg=cfg)
+                    output["main"] = results
+                except Exception as e:
+                    _log.exception("federated_search main error")
+                    output["main"] = [{"error": "internal", "message": str(e)}]
+
+        elif src.startswith("explore:"):
+            explore_name = src[len("explore:") :]
+            from scholaraio.explore import validate_explore_name
+
+            if explore_name != "*" and not validate_explore_name(explore_name):
+                output[src] = [
+                    {
+                        "error": "invalid_explore_name",
+                        "message": f"Invalid explore library name '{explore_name}'. Names must be non-empty and must not contain path separators or '..'.",
+                    }
+                ]
+                continue
+            if explore_name == "*":
+                from scholaraio.explore import list_explore_libs
+
+                names = list_explore_libs(cfg)
+                if not names:
+                    output["explore:*"] = [
+                        {
+                            "error": "no_explore_libs",
+                            "message": "No explore libraries found. Run: scholaraio explore fetch --name <name>",
+                        }
+                    ]
+            else:
+                names = [explore_name]
+            for name in names:
+                from scholaraio.explore import explore_db_path, explore_unified_search
+
+                db = explore_db_path(name, cfg)
+                if not db.exists():
+                    output[f"explore:{name}"] = [{"error": "db_not_found", "message": f"Explore DB not found: {name}"}]
+                    continue
+                try:
+                    results = explore_unified_search(name, query, top_k=top_k, cfg=cfg)
+                    output[f"explore:{name}"] = results
+                except Exception as e:
+                    _log.exception("federated_search explore:%s error", name)
+                    output[f"explore:{name}"] = [{"error": "internal", "message": str(e)}]
+
+        elif src == "arxiv":
+            from scholaraio.sources.arxiv import search_arxiv
+
+            arxiv_results = search_arxiv(query, top_k)
+            if arxiv_results:
+                # Annotate which results are already in the main library.
+                # Query only the DOIs present in this result set to avoid
+                # loading the entire papers_registry on every call.
+                arxiv_dois = [r["doi"].lower() for r in arxiv_results if r.get("doi")]
+                in_lib_dois: set[str] = set()
+                if arxiv_dois and Path(cfg.index_db).exists():
+                    try:
+                        placeholders = ",".join("?" * len(arxiv_dois))
+                        with sqlite3.connect(str(cfg.index_db)) as conn:
+                            rows = conn.execute(
+                                f"SELECT doi FROM papers_registry WHERE LOWER(doi) IN ({placeholders})",
+                                arxiv_dois,
+                            ).fetchall()
+                        in_lib_dois = {r[0].lower() for r in rows}
+                    except Exception:
+                        _log.debug("arXiv in-library annotation failed (index_db=%s)", cfg.index_db, exc_info=True)
+                for r in arxiv_results:
+                    r["in_main_library"] = bool(r.get("doi") and r["doi"].lower() in in_lib_dois)
+            output["arxiv"] = arxiv_results
+
+        else:
+            output[src] = [
+                {
+                    "error": "unknown_scope",
+                    "message": f"Unknown scope '{src}'. Supported: main / explore:NAME / explore:* / arxiv",
+                }
+            ]
+
+    return json.dumps(output, ensure_ascii=False)
+
+
+# ============================================================================
 #  Entry point
 # ============================================================================
 

@@ -1,8 +1,11 @@
 ---
 name: show
 description: View paper content at different detail levels. L1 (metadata), L2 (abstract), L3 (conclusion), L4 (full text). Use when the user wants to read a paper, see its abstract, conclusion, or full content.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "papers", "reading", "content"]
 ---
-
 # 查看论文内容
 
 按分层结构查看指定论文的内容。支持 L1（元数据）、L2（摘要）、L3（结论）、L4（全文）四个层次。

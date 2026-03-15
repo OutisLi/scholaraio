@@ -13,13 +13,17 @@
     "academic",
     "research",
     "literature-review",
+    "systematic-review",
     "citation",
-    "paper",
+    "citations",
+    "papers",
     "scholarly-writing",
     "knowledge-base",
     "semantic-search",
     "topic-modeling",
-    "bibtex"
+    "bibtex",
+    "scholarship",
+    "bibliography"
   ],
   "category": "research"
 }

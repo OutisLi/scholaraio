@@ -1,8 +1,11 @@
 ---
 name: audit
 description: Audit paper data quality in the knowledge base. Checks for missing fields, filename issues, DOI duplicates, title mismatches, and more. Supports LLM-based deep diagnosis for title mismatches and automated repair. Use when the user wants to check data quality, find problems, or fix metadata issues.
+version: 1.0.0
+author: ZimoLiao/scholaraio
+license: MIT
+tags: ["academic", "research", "metadata", "data-quality"]
 ---
-
 # 论文审计
 
 检查已入库论文的数据质量。分阶段：规则化检查（自动）+ LLM 深度诊断（对可疑项）+ 自动修复。
