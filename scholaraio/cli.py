@@ -1573,7 +1573,7 @@ def _query_dois_for_set(cfg, doi_set: list[str]) -> set[str]:
         placeholders = ",".join("?" * len(normalized))
         with sqlite3.connect(str(cfg.index_db)) as conn:
             rows = conn.execute(
-                f"SELECT doi FROM papers_registry WHERE doi IN ({placeholders})",
+                f"SELECT doi FROM papers_registry WHERE LOWER(doi) IN ({placeholders})",
                 normalized,
             ).fetchall()
         return {r[0].lower() for r in rows}
