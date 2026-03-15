@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -117,8 +118,6 @@ class TestMetricsStore:
     def test_record_with_detail(self, store):
         store.record("llm", "test", detail={"key": "value", "num": 42})
         results = store.query(category="llm")
-        import json
-
         detail = json.loads(results[0]["detail"])
         assert detail["key"] == "value"
         assert detail["num"] == 42
