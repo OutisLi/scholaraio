@@ -52,6 +52,7 @@ L3_SKIP_TYPES = frozenset(
         "document",
         "technical-report",
         "lecture-notes",
+        "patent",
     }
 )
 
@@ -113,15 +114,28 @@ def load_l3(json_path: Path) -> str | None:
     return data.get("l3_conclusion") or None
 
 
-def load_l4(md_path: Path) -> str:
-    """加载 L4 层全文 Markdown。
+def load_l4(md_path: Path, *, lang: str | None = None) -> str:
+    """加载 L4 层全文 Markdown，可选加载翻译版本。
+
+    当指定 ``lang`` 时，优先加载 ``paper_{lang}.md``（如 ``paper_zh.md``），
+    不存在则回退到原文 ``paper.md``。
 
     Args:
         md_path: MinerU 输出的 ``.md`` 文件路径。
+        lang: 目标语言代码（如 ``"zh"``），为 ``None`` 时加载原文。
 
     Returns:
         完整 Markdown 文本。
     """
+    if lang:
+        # Normalize + validate lang to prevent path traversal (only allow [a-z]{2,5})
+        lang = lang.lower().strip()
+        if not re.match(r"^[a-z]{2,5}$", lang):
+            _log.warning("invalid lang code %r, falling back to original", lang)
+        else:
+            translated = md_path.parent / f"paper_{lang}.md"
+            if translated.exists():
+                return translated.read_text(encoding="utf-8", errors="replace")
     return md_path.read_text(encoding="utf-8", errors="replace")
 
 
