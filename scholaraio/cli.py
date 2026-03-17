@@ -284,7 +284,11 @@ def cmd_show(args: argparse.Namespace, cfg) -> None:
         lang = getattr(args, "lang", None)
         if lang:
             lang = lang.lower().strip()
-            ui(f"\n--- Full Text ({lang}) ---\n")
+            translated_path = md_path.parent / f"paper_{lang}.md"
+            if translated_path.exists():
+                ui(f"\n--- Full Text ({lang}) ---\n")
+            else:
+                ui(f"\n--- Full Text (原文, paper_{lang}.md 不存在) ---\n")
         else:
             ui("\n--- Full Text ---\n")
         ui(load_l4(md_path, lang=lang))

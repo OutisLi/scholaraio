@@ -625,8 +625,12 @@ def lookup_paper(db_path: Path, user_input: str) -> dict | None:
         row = conn.execute("SELECT * FROM papers_registry WHERE dir_name = ?", (user_input,)).fetchone()
         if row:
             return dict(row)
-        # Try DOI
-        row = conn.execute("SELECT * FROM papers_registry WHERE doi = ?", (user_input,)).fetchone()
+        # Try DOI (normalize: strip + lowercase for case-insensitive match)
+        normalized_doi = user_input.strip().lower()
+        row = conn.execute(
+            "SELECT * FROM papers_registry WHERE LOWER(doi) = ?",
+            (normalized_doi,),
+        ).fetchone()
         if row:
             return dict(row)
         # Try patent publication number (normalize to uppercase)
