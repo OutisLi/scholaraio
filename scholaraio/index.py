@@ -230,23 +230,64 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
                 (paper_id, h),
             )
 
-            # Update papers_registry
+            # Update papers_registry — use ON CONFLICT(id) DO UPDATE so that
+            # a publication_number UNIQUE violation is surfaced rather than
+            # silently deleting a different paper's row (which INSERT OR REPLACE
+            # would do when the new pub_num collides with another id's row).
             dir_name = pdir.name
             pub_num = ((meta.get("ids") or {}).get("patent_publication_number", "") or "").upper().strip()
-            conn.execute(
-                """INSERT OR REPLACE INTO papers_registry
-                   (id, dir_name, title, doi, publication_number, year, first_author)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    paper_id,
-                    dir_name,
-                    meta.get("title") or "",
-                    meta.get("doi") or "",
+            try:
+                conn.execute(
+                    """INSERT INTO papers_registry
+                       (id, dir_name, title, doi, publication_number, year, first_author)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(id) DO UPDATE SET
+                           dir_name=excluded.dir_name,
+                           title=excluded.title,
+                           doi=excluded.doi,
+                           publication_number=excluded.publication_number,
+                           year=excluded.year,
+                           first_author=excluded.first_author""",
+                    (
+                        paper_id,
+                        dir_name,
+                        meta.get("title") or "",
+                        meta.get("doi") or "",
+                        pub_num,
+                        meta.get("year"),
+                        meta.get("first_author_lastname") or "",
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "publication_number %r for paper %s conflicts with another paper; "
+                    "storing without publication_number",
                     pub_num,
-                    meta.get("year"),
-                    meta.get("first_author_lastname") or "",
-                ),
-            )
+                    paper_id,
+                )
+                conn.execute(
+                    """INSERT INTO papers_registry
+                       (id, dir_name, title, doi, publication_number, year, first_author)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(id) DO UPDATE SET
+                           dir_name=excluded.dir_name,
+                           title=excluded.title,
+                           doi=excluded.doi,
+                           publication_number=excluded.publication_number,
+                           year=excluded.year,
+                           first_author=excluded.first_author""",
+                    (
+                        paper_id,
+                        dir_name,
+                        meta.get("title") or "",
+                        meta.get("doi") or "",
+                        "",  # clear conflicting pub_num
+                        meta.get("year"),
+                        meta.get("first_author_lastname") or "",
+                    ),
+                )
 
             # Insert references into citations table
             refs = meta.get("references") or []

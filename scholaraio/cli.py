@@ -727,8 +727,16 @@ def cmd_translate(args: argparse.Namespace, cfg) -> None:
 
     papers_dir = cfg.papers_dir
 
-    # Determine target language: CLI flag > config default
-    target_lang = args.lang or cfg.translate.target_lang
+    # Determine target language: CLI flag > config default; normalize input
+    target_lang = (args.lang or cfg.translate.target_lang).lower().strip()
+
+    try:
+        from scholaraio.translate import _validate_lang
+
+        _validate_lang(target_lang)
+    except ValueError:
+        ui(f"错误: 无效的语言代码 '{target_lang}'（应为 2-5 个小写字母，如 zh、en、ja）")
+        sys.exit(1)
 
     if args.paper_id:
         paper_d = _resolve_paper(args.paper_id, cfg)

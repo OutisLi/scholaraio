@@ -394,7 +394,7 @@ def _extract_patent_number(meta, text: str) -> None:
 
     m = PATENT_NUMBER_RE.search(text[:10000])
     if m and not meta.publication_number:
-        meta.publication_number = m.group(1)
+        meta.publication_number = m.group(1).upper()
     # Heuristic: if publication_number found and no DOI, likely a patent
     if meta.publication_number and not meta.doi:
         if not meta.paper_type or meta.paper_type in ("", "article"):

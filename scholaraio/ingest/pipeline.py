@@ -1694,7 +1694,7 @@ def _detect_patent(ctx: InboxCtx) -> bool:
             m = PATENT_NUMBER_RE.search(text)
             if m:
                 if ctx.meta and not ctx.meta.publication_number:
-                    ctx.meta.publication_number = m.group(1)
+                    ctx.meta.publication_number = m.group(1).upper()
                 _log.debug("patent detected by publication number in text: %s", m.group(1))
                 return True
         except Exception as e:
