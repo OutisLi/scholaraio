@@ -128,9 +128,10 @@ def load_l4(md_path: Path, *, lang: str | None = None) -> str:
         完整 Markdown 文本。
     """
     if lang:
-        # Validate lang to prevent path traversal (only allow [a-z]{2,5})
+        # Normalize + validate lang to prevent path traversal (only allow [a-z]{2,5})
         import re
 
+        lang = lang.lower().strip()
         if not re.match(r"^[a-z]{2,5}$", lang):
             _log.warning("invalid lang code %r, falling back to original", lang)
         else:

@@ -283,6 +283,7 @@ def cmd_show(args: argparse.Namespace, cfg) -> None:
             sys.exit(1)
         lang = getattr(args, "lang", None)
         if lang:
+            lang = lang.lower().strip()
             ui(f"\n--- Full Text ({lang}) ---\n")
         else:
             ui("\n--- Full Text ---\n")

@@ -358,7 +358,7 @@ def step_dedup(ctx: InboxCtx) -> StepResult:
     if ctx.is_thesis:
         ctx.meta.paper_type = "thesis"
         _log.debug("thesis inbox, skipping API and dedup")
-        ui(f"Thesis: {ctx.meta.title or '?'}")
+        ui(f"学位论文: {ctx.meta.title or '?'}")
         return StepResult.OK
 
     # Patent inbox: set paper_type, skip API query, use publication_number for dedup
@@ -1988,20 +1988,59 @@ def _update_registry(cfg, meta, dir_name: str) -> None:
             except sqlite3.OperationalError:
                 conn.execute("ALTER TABLE papers_registry ADD COLUMN publication_number TEXT")
             pub_num = (getattr(meta, "publication_number", "") or "").upper().strip()
-            conn.execute(
-                """INSERT OR REPLACE INTO papers_registry
-                   (id, dir_name, title, doi, publication_number, year, first_author)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    meta.id,
-                    dir_name,
-                    meta.title or "",
-                    meta.doi or "",
-                    pub_num,
-                    meta.year,
-                    meta.first_author_lastname or "",
-                ),
-            )
+            try:
+                conn.execute(
+                    """INSERT INTO papers_registry
+                       (id, dir_name, title, doi, publication_number, year, first_author)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(id) DO UPDATE SET
+                           dir_name=excluded.dir_name,
+                           title=excluded.title,
+                           doi=excluded.doi,
+                           publication_number=excluded.publication_number,
+                           year=excluded.year,
+                           first_author=excluded.first_author""",
+                    (
+                        meta.id,
+                        dir_name,
+                        meta.title or "",
+                        meta.doi or "",
+                        pub_num,
+                        meta.year,
+                        meta.first_author_lastname or "",
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                err_msg = str(exc).lower()
+                if "publication_number" in err_msg and pub_num:
+                    _log.warning(
+                        "publication_number %r for %s conflicts; storing without it",
+                        pub_num,
+                        meta.id,
+                    )
+                    conn.execute(
+                        """INSERT INTO papers_registry
+                           (id, dir_name, title, doi, publication_number, year, first_author)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)
+                           ON CONFLICT(id) DO UPDATE SET
+                               dir_name=excluded.dir_name,
+                               title=excluded.title,
+                               doi=excluded.doi,
+                               publication_number=excluded.publication_number,
+                               year=excluded.year,
+                               first_author=excluded.first_author""",
+                        (
+                            meta.id,
+                            dir_name,
+                            meta.title or "",
+                            meta.doi or "",
+                            "",
+                            meta.year,
+                            meta.first_author_lastname or "",
+                        ),
+                    )
+                else:
+                    _log.warning("IntegrityError in _update_registry for %s: %s", meta.id, exc)
     except Exception as e:
         _log.debug("failed to update papers_registry: %s", e)
 

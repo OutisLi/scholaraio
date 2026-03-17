@@ -258,36 +258,45 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
                         meta.get("first_author_lastname") or "",
                     ),
                 )
-            except sqlite3.IntegrityError:
+            except sqlite3.IntegrityError as exc:
                 import logging
 
-                logging.getLogger(__name__).warning(
-                    "publication_number %r for paper %s conflicts with another paper; "
-                    "storing without publication_number",
-                    pub_num,
-                    paper_id,
-                )
-                conn.execute(
-                    """INSERT INTO papers_registry
-                       (id, dir_name, title, doi, publication_number, year, first_author)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)
-                       ON CONFLICT(id) DO UPDATE SET
-                           dir_name=excluded.dir_name,
-                           title=excluded.title,
-                           doi=excluded.doi,
-                           publication_number=excluded.publication_number,
-                           year=excluded.year,
-                           first_author=excluded.first_author""",
-                    (
+                _idx_log = logging.getLogger(__name__)
+                err_msg = str(exc).lower()
+                if "publication_number" in err_msg and pub_num:
+                    _idx_log.warning(
+                        "publication_number %r for paper %s conflicts with another paper; "
+                        "storing without publication_number",
+                        pub_num,
                         paper_id,
-                        dir_name,
-                        meta.get("title") or "",
-                        meta.get("doi") or "",
-                        "",  # clear conflicting pub_num
-                        meta.get("year"),
-                        meta.get("first_author_lastname") or "",
-                    ),
-                )
+                    )
+                    conn.execute(
+                        """INSERT INTO papers_registry
+                           (id, dir_name, title, doi, publication_number, year, first_author)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)
+                           ON CONFLICT(id) DO UPDATE SET
+                               dir_name=excluded.dir_name,
+                               title=excluded.title,
+                               doi=excluded.doi,
+                               publication_number=excluded.publication_number,
+                               year=excluded.year,
+                               first_author=excluded.first_author""",
+                        (
+                            paper_id,
+                            dir_name,
+                            meta.get("title") or "",
+                            meta.get("doi") or "",
+                            "",  # clear conflicting pub_num
+                            meta.get("year"),
+                            meta.get("first_author_lastname") or "",
+                        ),
+                    )
+                else:
+                    _idx_log.warning(
+                        "IntegrityError for paper %s: %s; skipping registry update",
+                        paper_id,
+                        exc,
+                    )
 
             # Insert references into citations table
             refs = meta.get("references") or []
