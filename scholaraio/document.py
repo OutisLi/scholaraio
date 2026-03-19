@@ -352,94 +352,95 @@ def inspect_xlsx(path: Path) -> str:
         raise ImportError("openpyxl 未安装，请运行: pip install openpyxl")
 
     wb = openpyxl.load_workbook(str(path), read_only=False, data_only=True)
-
-    lines: list[str] = []
-    lines.append(f"=== XLSX: {path.name} ===")
-    lines.append(f"工作表: {len(wb.sheetnames)} ({', '.join(wb.sheetnames)})")
-    lines.append("")
-
-    total_rows = 0
-
-    for ws_name in wb.sheetnames:
-        ws = wb[ws_name]
-        active_mark = " (active)" if ws == wb.active else ""
-        lines.append(f'--- Sheet "{ws_name}"{active_mark} ---')
-
-        dims = ws.dimensions or "?"
-        mr = ws.max_row or 0
-        mc = ws.max_column or 0
-        total_rows += mr
-        lines.append(f"  范围: {dims} ({mr} 行 x {mc} 列)")
-
-        # Frozen panes
-        if ws.freeze_panes:
-            lines.append(f"  冻结窗格: {ws.freeze_panes}")
-
-        # Auto-filter
-        if ws.auto_filter and ws.auto_filter.ref:
-            lines.append(f"  自动筛选: {ws.auto_filter.ref}")
-
-        # Merged cells
-        if ws.merged_cells.ranges:
-            merges = [str(r) for r in list(ws.merged_cells.ranges)[:5]]
-            merge_str = ", ".join(merges)
-            if len(ws.merged_cells.ranges) > 5:
-                merge_str += f" ... (+{len(ws.merged_cells.ranges) - 5})"
-            lines.append(f"  合并单元格: {merge_str}")
-
-        # Header row (row 1)
-        if mr > 0 and mc > 0:
-            headers = []
-            for c in range(1, min(mc + 1, 8)):
-                val = ws.cell(row=1, column=c).value
-                headers.append(str(val)[:25] if val is not None else "")
-            hdr_str = " | ".join(headers)
-            if mc > 7:
-                hdr_str += " | ..."
-            lines.append(f"  表头 (row 1): {hdr_str}")
-
-        # Data preview (rows 2-4)
-        preview_rows = min(mr, 4) - 1
-        if preview_rows > 0:
-            lines.append("  数据预览:")
-            for r in range(2, 2 + preview_rows):
-                vals = []
-                for c in range(1, min(mc + 1, 8)):
-                    val = ws.cell(row=r, column=c).value
-                    s = str(val)[:25] if val is not None else ""
-                    vals.append(s)
-                lines.append(f"    Row {r}: {' | '.join(vals)}")
-
-        # Charts
-        if ws._charts:
-            lines.append(f"  图表: {len(ws._charts)}")
-            for ci, chart in enumerate(ws._charts, 1):
-                chart_type = type(chart).__name__
-                # Extract title string from openpyxl chart title object
-                title_str = "(无标题)"
-                if chart.title:
-                    if isinstance(chart.title, str):
-                        title_str = chart.title
-                    else:
-                        # openpyxl Title object — extract text from rich text runs
-                        try:
-                            for para in chart.title.tx.rich.paragraphs:
-                                for run in para.r:
-                                    if run.t:
-                                        title_str = run.t
-                                        break
-                                if title_str != "(无标题)":
-                                    break
-                        except (AttributeError, TypeError):
-                            title_str = str(chart.title)[:40]
-                lines.append(f'    [{ci}] {chart_type}: "{title_str}"')
-
+    try:
+        lines: list[str] = []
+        lines.append(f"=== XLSX: {path.name} ===")
+        lines.append(f"工作表: {len(wb.sheetnames)} ({', '.join(wb.sheetnames)})")
         lines.append("")
 
-    # Summary
-    chart_total = sum(len(wb[s]._charts) for s in wb.sheetnames)
-    lines.append("--- 总结 ---")
-    lines.append(f"工作表: {len(wb.sheetnames)} | 总行数: ~{total_rows} | 图表: {chart_total}")
+        total_rows = 0
 
-    wb.close()
-    return "\n".join(lines)
+        for ws_name in wb.sheetnames:
+            ws = wb[ws_name]
+            active_mark = " (active)" if ws == wb.active else ""
+            lines.append(f'--- Sheet "{ws_name}"{active_mark} ---')
+
+            dims = ws.dimensions or "?"
+            mr = ws.max_row or 0
+            mc = ws.max_column or 0
+            total_rows += mr
+            lines.append(f"  范围: {dims} ({mr} 行 x {mc} 列)")
+
+            # Frozen panes
+            if ws.freeze_panes:
+                lines.append(f"  冻结窗格: {ws.freeze_panes}")
+
+            # Auto-filter
+            if ws.auto_filter and ws.auto_filter.ref:
+                lines.append(f"  自动筛选: {ws.auto_filter.ref}")
+
+            # Merged cells
+            if ws.merged_cells.ranges:
+                merges = [str(r) for r in list(ws.merged_cells.ranges)[:5]]
+                merge_str = ", ".join(merges)
+                if len(ws.merged_cells.ranges) > 5:
+                    merge_str += f" ... (+{len(ws.merged_cells.ranges) - 5})"
+                lines.append(f"  合并单元格: {merge_str}")
+
+            # Header row (row 1)
+            if mr > 0 and mc > 0:
+                headers = []
+                for c in range(1, min(mc + 1, 8)):
+                    val = ws.cell(row=1, column=c).value
+                    headers.append(str(val)[:25] if val is not None else "")
+                hdr_str = " | ".join(headers)
+                if mc > 7:
+                    hdr_str += " | ..."
+                lines.append(f"  表头 (row 1): {hdr_str}")
+
+            # Data preview (rows 2-4)
+            preview_rows = min(mr, 4) - 1
+            if preview_rows > 0:
+                lines.append("  数据预览:")
+                for r in range(2, 2 + preview_rows):
+                    vals = []
+                    for c in range(1, min(mc + 1, 8)):
+                        val = ws.cell(row=r, column=c).value
+                        s = str(val)[:25] if val is not None else ""
+                        vals.append(s)
+                    lines.append(f"    Row {r}: {' | '.join(vals)}")
+
+            # Charts
+            if ws._charts:
+                lines.append(f"  图表: {len(ws._charts)}")
+                for ci, chart in enumerate(ws._charts, 1):
+                    chart_type = type(chart).__name__
+                    # Extract title string from openpyxl chart title object
+                    title_str = "(无标题)"
+                    if chart.title:
+                        if isinstance(chart.title, str):
+                            title_str = chart.title
+                        else:
+                            # openpyxl Title object — extract text from rich text runs
+                            try:
+                                for para in chart.title.tx.rich.paragraphs:
+                                    for run in para.r:
+                                        if run.t:
+                                            title_str = run.t
+                                            break
+                                    if title_str != "(无标题)":
+                                        break
+                            except (AttributeError, TypeError):
+                                title_str = str(chart.title)[:40]
+                    lines.append(f'    [{ci}] {chart_type}: "{title_str}"')
+
+            lines.append("")
+
+        # Summary
+        chart_total = sum(len(wb[s]._charts) for s in wb.sheetnames)
+        lines.append("--- 总结 ---")
+        lines.append(f"工作表: {len(wb.sheetnames)} | 总行数: ~{total_rows} | 图表: {chart_total}")
+
+        return "\n".join(lines)
+    finally:
+        wb.close()

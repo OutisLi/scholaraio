@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-docx_lib = pytest.importorskip("docx")
-pptx_lib = pytest.importorskip("pptx")
-openpyxl = pytest.importorskip("openpyxl")
+pytest.importorskip("docx")
+pytest.importorskip("pptx")
+pytest.importorskip("openpyxl")
 
 
 # ---------------------------------------------------------------------------
