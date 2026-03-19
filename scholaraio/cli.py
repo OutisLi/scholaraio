@@ -1677,6 +1677,7 @@ def cmd_ws(args: argparse.Namespace, cfg) -> None:
             paper_ids=list(dir_names),
             year=args.year,
             journal=args.journal,
+            paper_type=args.paper_type,
         )
         if not bib:
             ui("未找到匹配的论文")
