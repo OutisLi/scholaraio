@@ -38,6 +38,8 @@ def inspect(path: Path, fmt: str | None = None) -> str:
     """
     if not path.exists():
         raise FileNotFoundError(f"文件不存在: {path}")
+    if not path.is_file():
+        raise ValueError(f"路径不是文件: {path}")
 
     if fmt is None:
         fmt = path.suffix.lstrip(".").lower()

@@ -161,7 +161,9 @@ def _build_filter(
         parts.append(f"primary_location.source.type:{source_type}")
     if year_range:
         parts.append(f"publication_year:{year_range}")
-    if min_citations is not None:
+    # OpenAlex cited_by_count filter expects a meaningful lower bound.
+    # Non-positive values are treated as "no filter" to avoid invalid/odd expressions.
+    if min_citations is not None and min_citations > 0:
         parts.append(f"cited_by_count:>{min_citations - 1}")
     if oa_type:
         parts.append(f"type:{oa_type}")

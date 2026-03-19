@@ -127,6 +127,12 @@ class TestInspectDispatcher:
         with pytest.raises(FileNotFoundError):
             inspect(tmp_path / "nonexistent.pptx")
 
+    def test_directory_path_rejected(self, tmp_path):
+        from scholaraio.document import inspect
+
+        with pytest.raises(ValueError, match="不是文件"):
+            inspect(tmp_path)
+
 
 class TestInspectPptx:
     def test_slide_count(self, sample_pptx):
