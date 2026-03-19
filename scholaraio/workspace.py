@@ -190,8 +190,8 @@ def validate_workspace_name(name: str) -> bool:
     """Return True if *name* is a safe workspace identifier.
 
     Rejects empty names, ``.``/``..`` names, leading/trailing whitespace,
-    absolute paths, path separators, and ``..`` components to prevent path
-    traversal outside ``workspace/``.
+    absolute paths, path separators, Windows drive-like names (``:``),
+    and ``..`` components to prevent path traversal outside ``workspace/``.
 
     Args:
         name: Candidate workspace name from user input.
@@ -212,6 +212,9 @@ def validate_workspace_name(name: str) -> bool:
     import os
 
     if os.path.isabs(normalized):
+        return False
+    # Reject Windows drive-like paths (e.g., C:foo).
+    if ":" in normalized:
         return False
     if "/" in normalized or "\\" in normalized:
         return False
@@ -278,6 +281,10 @@ def rename(ws_root: Path, old_name: str, new_name: str) -> Path:
     new_dir = ws_root / new_name
     if not old_dir.exists():
         raise FileNotFoundError(f"工作区不存在: {old_name}")
+    if not old_dir.is_dir():
+        raise ValueError(f"不是有效工作区目录: {old_name}")
+    if not _papers_json(old_dir).exists():
+        raise ValueError(f"缺少 papers.json，无法重命名工作区: {old_name}")
     if new_dir.exists():
         raise FileExistsError(f"目标工作区已存在: {new_name}")
     old_dir.rename(new_dir)

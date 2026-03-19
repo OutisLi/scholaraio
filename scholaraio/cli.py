@@ -2616,7 +2616,6 @@ def cmd_citation_check(args: argparse.Namespace, cfg) -> None:
     results = check_citations(
         citations,
         cfg.index_db,
-        cfg.papers_dir,
         paper_ids=paper_ids,
     )
 

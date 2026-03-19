@@ -112,7 +112,6 @@ def extract_citations(text: str) -> list[dict]:
 def check_citations(
     citations: list[dict],
     db_path: Path,
-    papers_dir: Path,
     *,
     paper_ids: set[str] | None = None,
 ) -> list[dict]:
@@ -121,7 +120,6 @@ def check_citations(
     Args:
         citations: Output of :func:`extract_citations`.
         db_path: Path to ``index.db``.
-        papers_dir: Path to ``data/papers/`` directory.
         paper_ids: Optional paper-ID whitelist (workspace filter).
 
     Returns:
