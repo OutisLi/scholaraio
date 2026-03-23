@@ -24,6 +24,7 @@ scholaraio setup
 ```
 
 See [Installation](getting-started/installation.md) for detailed instructions.
+See [Agent Setup](getting-started/agent-setup.md) for repo-open vs plugin vs MCP setup paths.
 
 ## Three Usage Modes
 
