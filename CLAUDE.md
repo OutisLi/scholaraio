@@ -86,7 +86,6 @@ MinerU 解析的 Markdown 保留了高质量公式（LaTeX）和图片附件（`
 | `audit.py` | 数据质量审计 + 修复 |
 | `sources/` | 数据源适配（local / endnote / zotero / arxiv） |
 | `cli.py` | 全量 CLI 入口 |
-
 | `setup.py` | 环境检测 + 安装向导 |
 | `metrics.py` | LLM token 用量 + API 计时 |
 | `translate.py` | 论文翻译（语言检测 + LLM 分块翻译 + 批量翻译） |

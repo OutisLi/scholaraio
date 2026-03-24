@@ -89,7 +89,6 @@ When the main agent delegates paper analysis to a subagent, information flows at
 | `audit.py` | Data quality audit + repair |
 | `sources/` | Data source adapters (local / endnote / zotero / arxiv) |
 | `cli.py` | Full CLI entry point |
-
 | `setup.py` | Environment detection + setup wizard |
 | `metrics.py` | LLM token usage + API timing |
 | `translate.py` | Paper translation (language detection + LLM chunked translation + batch translation) |
