@@ -187,8 +187,26 @@ def append_notes(paper_dir: Path, section: str) -> None:
     notes_path = paper_dir / _NOTES_FILENAME
     section = section.rstrip("\n")
     if notes_path.exists():
+        # Only add enough newlines to get exactly one blank line separator
+        tail = b""
+        try:
+            with open(notes_path, "rb") as f:
+                f.seek(0, 2)
+                pos = f.tell()
+                n = min(pos, 4)
+                f.seek(pos - n)
+                tail = f.read(n)
+        except OSError:
+            pass
+        trailing = 0
+        for i in range(len(tail) - 1, -1, -1):
+            if tail[i : i + 1] == b"\n":
+                trailing += 1
+            else:
+                break
+        prefix = "\n" * max(0, 2 - trailing)
         with open(notes_path, "a", encoding="utf-8") as f:
-            f.write("\n\n" + section + "\n")
+            f.write(prefix + section + "\n")
     else:
         notes_path.write_text(section + "\n", encoding="utf-8")
     _log.debug("appended notes to %s", notes_path)
@@ -244,8 +262,7 @@ def enrich_toc(
     toc: list[dict] | None = None
 
     if len(raw_headers) >= _RULE_THRESHOLD:
-        _log.debug("header count %d >= %d, using rule-based extraction",
-                    len(raw_headers), _RULE_THRESHOLD)
+        _log.debug("header count %d >= %d, using rule-based extraction", len(raw_headers), _RULE_THRESHOLD)
         toc = _toc_from_rules(raw_headers, title)
         if toc:
             _log.debug("rule-based extraction: %d entries", len(toc))
@@ -480,25 +497,34 @@ def _extract_headers(lines: list[str]) -> list[dict]:
 _RE_NUMBERED = re.compile(r"^(\d+(?:\.\d+)*)\.?(?:\s|(?=[\u4e00-\u9fff]))")
 # "Chapter 1 Title" or Chinese "第一章" / "第1章" pattern
 _RE_CHAPTER = re.compile(r"^Chapter\s+(\d+)\b", re.IGNORECASE)
-_RE_CHAPTER_ZH = re.compile(
-    r"^第\s*([一二三四五六七八九十百\d]+)\s*章"
-)
+_RE_CHAPTER_ZH = re.compile(r"^第\s*([一二三四五六七八九十百\d]+)\s*章")
 # TOC-area entries have trailing page numbers like "Title 123" or "Title . 123"
 # Require >= 2 digits to avoid matching "Chapter 1", "Part 2", etc.
 _RE_TRAILING_PAGE = re.compile(r"[.\s]\s*\d{2,4}\s*$")
 # Well-known structural sections (unnumbered)
 _KNOWN_SECTIONS = {
-    "abstract", "introduction", "preface", "foreword",
-    "conclusion", "conclusions", "concluding remarks", "summary",
-    "references", "bibliography", "index",
-    "acknowledgments", "acknowledgements", "funding",
-    "appendix", "glossary", "nomenclature", "notation",
+    "abstract",
+    "introduction",
+    "preface",
+    "foreword",
+    "conclusion",
+    "conclusions",
+    "concluding remarks",
+    "summary",
+    "references",
+    "bibliography",
+    "index",
+    "acknowledgments",
+    "acknowledgements",
+    "funding",
+    "appendix",
+    "glossary",
+    "nomenclature",
+    "notation",
 }
 
 
-def _toc_from_rules(
-    raw_headers: list[dict], title: str
-) -> list[dict] | None:
+def _toc_from_rules(raw_headers: list[dict], title: str) -> list[dict] | None:
     """Try to build TOC purely from rules. Returns list of toc entries or None.
 
     Strategy:
@@ -522,9 +548,7 @@ def _toc_from_rules(
     total_lines = raw_headers[-1]["line"] if raw_headers else 1
     toc_cutoff_line = max(total_lines * 0.10, 500)
     page_indices = [
-        idx for idx, h in enumerate(raw_headers)
-        if h["line"] <= toc_cutoff_line
-        and _RE_TRAILING_PAGE.search(h["text"])
+        idx for idx, h in enumerate(raw_headers) if h["line"] <= toc_cutoff_line and _RE_TRAILING_PAGE.search(h["text"])
     ]
     if len(page_indices) >= 5:
         body_start = page_indices[-1] + 1
@@ -535,8 +559,13 @@ def _toc_from_rules(
     # marker: "Chapter 1", numbered section "1" or "1.1", or known
     # front-matter sections (Preface, Foreword, Introduction, Notation).
     _FRONT_SECTIONS = {
-        "preface", "foreword", "notation", "symbols",
-        "acknowledgments", "acknowledgements", "introduction",
+        "preface",
+        "foreword",
+        "notation",
+        "symbols",
+        "acknowledgments",
+        "acknowledgements",
+        "introduction",
     }
     for idx in range(body_start, len(raw_headers)):
         h = raw_headers[idx]
@@ -552,11 +581,24 @@ def _toc_from_rules(
             body_start = idx
             break
         # Known front-matter sections that appear before Chapter 1
-        if text_lower.split(" to ")[0].strip().rstrip("s") in (
-            "preface", "foreword", "notation", "symbol",
-            "acknowledgment", "acknowledgement",
-        ) or text_lower.startswith("preface") or text_lower in (
-            "摘要", "前言", "序言", "绪论",
+        if (
+            text_lower.split(" to ")[0].strip().rstrip("s")
+            in (
+                "preface",
+                "foreword",
+                "notation",
+                "symbol",
+                "acknowledgment",
+                "acknowledgement",
+            )
+            or text_lower.startswith("preface")
+            or text_lower
+            in (
+                "摘要",
+                "前言",
+                "序言",
+                "绪论",
+            )
         ):
             body_start = idx
             break
@@ -567,6 +609,7 @@ def _toc_from_rules(
 
     # --- pass 2: detect running headers (appear >= 3 times) ---
     from collections import Counter
+
     text_counts = Counter(h["text"].lower().strip() for h in body_headers)
     running_headers = {t for t, c in text_counts.items() if c >= 3}
 
@@ -585,9 +628,15 @@ def _toc_from_rules(
             continue
         # skip common metadata noise
         if text_lower in (
-            "contents", "table of contents", "acronyms", "abbreviations",
-            "articleinfo", "affiliations",
-            "目录", "插图目录", "表格目录",
+            "contents",
+            "table of contents",
+            "acronyms",
+            "abbreviations",
+            "articleinfo",
+            "affiliations",
+            "目录",
+            "插图目录",
+            "表格目录",
         ):
             continue
 
@@ -597,7 +646,7 @@ def _toc_from_rules(
         m_chap_zh = _RE_CHAPTER_ZH.match(text)
         if m_chap:
             # "Chapter 3 Title" → level 1, strip "Chapter N" prefix for clean title
-            clean = text[m_chap.end():].strip()
+            clean = text[m_chap.end() :].strip()
             num = m_chap.group(1)
             final_title = f"{num} {clean}" if clean else f"Chapter {num}"
             toc.append({"line": h["line"], "level": 1, "title": final_title})
@@ -611,11 +660,20 @@ def _toc_from_rules(
             # strip trailing page-number-like remnants (shouldn't exist in body, but be safe)
             clean_text = _RE_TRAILING_PAGE.sub("", text).strip().rstrip(".")
             toc.append({"line": h["line"], "level": level, "title": clean_text})
-        elif text_lower.split(",")[0].strip() in _KNOWN_SECTIONS or any(
-            text_lower.startswith(s) for s in ("appendix",)
-        ) or text in (
-            "摘要", "前言", "绪论", "结论", "总结",
-            "参考文献", "致谢", "附录",
+        elif (
+            text_lower.split(",")[0].strip() in _KNOWN_SECTIONS
+            or any(text_lower.startswith(s) for s in ("appendix",))
+            or text
+            in (
+                "摘要",
+                "前言",
+                "绪论",
+                "结论",
+                "总结",
+                "参考文献",
+                "致谢",
+                "附录",
+            )
         ):
             toc.append({"line": h["line"], "level": 1, "title": text})
         # else: skip (unnumbered, unknown → likely noise)

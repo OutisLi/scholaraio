@@ -2773,8 +2773,13 @@ def main() -> None:
         help="加载层级：1=元数据, 2=摘要, 3=结论, 4=全文（默认 2）",
     )
     p_show.add_argument("--lang", type=str, default=None, help="加载翻译版本（如 zh），仅 L4 生效")
-    p_show.add_argument("--append-notes", type=str, default=None, metavar="TEXT",
-                        help="向论文笔记 notes.md 追加内容（T2 层，跨会话复用）")
+    p_show.add_argument(
+        "--append-notes",
+        type=str,
+        default=None,
+        metavar="TEXT",
+        help="向论文笔记 notes.md 追加内容（T2 层，跨会话复用）",
+    )
 
     # --- embed ---
     p_embed = sub.add_parser("embed", help="生成语义向量写入 index.db")
