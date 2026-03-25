@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -264,14 +265,19 @@ def _clean_title_for_filename(title: str) -> str:
     """Clean title for use in filename: keep full title, strip math/formulas."""
     if not title:
         return "Untitled"
+    # Decode HTML/XML entities (&#x007B; → {, &amp; → &, etc.)
+    title = html.unescape(title)
+    # Remove MathML / XML tags
+    title = re.sub(r"<[^>]+>", "", title)
     # Remove LaTeX inline math: $...$
     title = re.sub(r"\$[^$]+\$", "", title)
-    # Remove LaTeX commands: \mathrm{...}, \textit{...}, etc.
-    title = re.sub(r"\\[a-zA-Z]+\{[^}]*\}", "", title)
+    # Remove LaTeX commands with nested braces: \mathrm{{\rm BH}_8}
+    for _ in range(3):  # handle up to 3 levels of nesting
+        title = re.sub(r"\\[a-zA-Z]+\{[^}]*\}", "", title)
     # Remove remaining backslash commands
     title = re.sub(r"\\[a-zA-Z]+", "", title)
-    # Remove standalone math symbols
-    title = re.sub(r"[=+<>~^{}|\\]", "", title)
+    # Remove standalone math symbols and braces
+    title = re.sub(r"[=+<>~^{}|_\\$]", "", title)
     # Collapse whitespace
     title = re.sub(r"\s+", " ", title).strip()
     return title
@@ -283,8 +289,14 @@ def _strip_diacritics(text: str) -> str:
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
 
-def _sanitize_for_filename(text: str) -> str:
-    """Make text filesystem-safe."""
+def _sanitize_for_filename(text: str, max_bytes: int = 255) -> str:
+    """Make text filesystem-safe.
+
+    Args:
+        text: Raw text to sanitize.
+        max_bytes: Maximum byte length for the resulting filename
+            (ext4/NTFS limit is 255 bytes per path component).
+    """
     # Replace whitespace with hyphens
     text = re.sub(r"\s+", "-", text)
     # Keep only safe characters (including Chinese)
@@ -293,6 +305,11 @@ def _sanitize_for_filename(text: str) -> str:
     text = re.sub(r"-{2,}", "-", text)
     # Strip leading/trailing hyphens
     text = text.strip("-")
+    # Truncate to max_bytes (respect multi-byte chars, cut at word boundary)
+    if len(text.encode("utf-8")) > max_bytes:
+        while len(text.encode("utf-8")) > max_bytes:
+            text = text.rsplit("-", 1)[0] if "-" in text else text[:-1]
+        text = text.strip("-")
     return text
 
 

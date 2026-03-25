@@ -46,6 +46,27 @@ class TestCleanTitleForFilename:
     def test_normal_title(self):
         assert _clean_title_for_filename("A Simple Title") == "A Simple Title"
 
+    def test_html_entities_decoded(self):
+        # Zotero may export braces as HTML entities
+        result = _clean_title_for_filename("La&#x007B;BH&#x007D;8")
+        assert "&#x" not in result
+        assert "{" not in result
+
+    def test_nested_latex_braces(self):
+        # Issue #32: Zotero APS titles with nested LaTeX
+        title = r"$\mathrm{La}{\mathrm{BH}}_8$: Towards high-${T}_c$ low-pressure superconductivity"
+        result = _clean_title_for_filename(title)
+        assert "$" not in result
+        assert "\\" not in result
+        assert "{" not in result
+
+    def test_mathml_tags_removed(self):
+        result = _clean_title_for_filename(
+            '<mml:math xmlns:mml="http://www.w3.org/1998/Math/MathML">x</mml:math> study'
+        )
+        assert "<" not in result
+        assert "mml" not in result
+
 
 class TestSanitizeForFilename:
     def test_spaces_to_hyphens(self):
@@ -69,6 +90,19 @@ class TestSanitizeForFilename:
         result = _sanitize_for_filename("王-2024-标题")
         assert "王" in result
         assert "标题" in result
+
+    def test_truncate_long_filename(self):
+        long_text = "A-" * 200  # 400 chars, well over 255 bytes
+        result = _sanitize_for_filename(long_text)
+        assert len(result.encode("utf-8")) <= 255
+
+    def test_truncate_preserves_chinese(self):
+        # Chinese chars are 3 bytes each in UTF-8
+        text = "王-2024-" + "测试" * 100
+        result = _sanitize_for_filename(text)
+        assert len(result.encode("utf-8")) <= 255
+        # Should not end with a partial character
+        result.encode("utf-8").decode("utf-8")  # should not raise
 
 
 class TestGenerateNewStem:
@@ -109,6 +143,28 @@ class TestGenerateNewStem:
         )
         stem = generate_new_stem(meta)
         assert "$" not in stem
+
+    def test_issue32_zotero_latex_title(self):
+        """Issue #32: Zotero APS title with LaTeX causes filename too long."""
+        meta = PaperMetadata(
+            first_author_lastname="Song",
+            year=2023,
+            title=r"$\mathrm{La}{\mathrm{BH}}_8$: Towards high-${T}_c$ low-pressure superconductivity in ternary superhydrides",
+        )
+        stem = generate_new_stem(meta)
+        assert len(stem.encode("utf-8")) <= 255
+        assert "$" not in stem
+        assert "\\" not in stem
+        assert "{" not in stem
+
+    def test_extreme_long_title(self):
+        meta = PaperMetadata(
+            first_author_lastname="Smith",
+            year=2023,
+            title="Word " * 100,
+        )
+        stem = generate_new_stem(meta)
+        assert len(stem.encode("utf-8")) <= 255
 
     def test_chinese_title(self):
         meta = PaperMetadata(
