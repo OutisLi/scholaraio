@@ -51,12 +51,37 @@ MinerU 解析的 Markdown 保留了高质量公式（LaTeX）和图片附件（`
 - 存储路径：`data/papers/<Author-Year-Title>/notes.md`
 - 每次分析追加一个 section，格式：`## YYYY-MM-DD | <workspace 名或任务来源> | <skill 名>`
 - 内容包括：关键发现、方法特点、与其他论文的对比、值得注意的局限性
-- 代码接口：`loader.load_notes(paper_dir)` 读取，`loader.append_notes(paper_dir, section)` 追加
+- CLI 接口：`scholaraio show "<paper-id>"` 自动展示笔记，`scholaraio show "<paper-id>" --append-notes "..."` 追加笔记
+- Python 接口：`loader.load_notes(paper_dir)` 读取，`loader.append_notes(paper_dir, section)` 增量追加
 
 **Subagent 工作流程：**
-1. 分析论文前，先用 `load_notes()` 检查是否已有历史笔记——有则复用，避免重复劳动
-2. 分析完成后，将值得跨会话保留的发现通过 `append_notes()` 写入 `notes.md`
+1. 分析论文前，先用 `scholaraio show "<paper-id>" --layer 1` 查看论文——`show` 命令会自动展示已有的 `notes.md` 历史笔记，有则优先复用，避免重复劳动。但笔记是之前 agent 的分析产物，可能存在遗漏、偏差或过时，应辩证看待；当笔记与当前任务高度相关或结论存疑时，应回到原文（L3/L4）交叉验证
+2. 分析完成后，**必须**将值得跨会话保留的发现写入 `notes.md`：
+   ```bash
+   scholaraio show "<paper-id>" --append-notes "## YYYY-MM-DD | <workspace/任务来源> | <分析类型>
+   - 关键发现 1
+   - 关键发现 2"
+   ```
 3. 返回给主 agent 的 T1 回复只包含精炼结论，不包含搜索过程等细节
+
+**主 agent 分派 subagent 时的检查项：**
+- 在 subagent prompt 中明确告知目标论文的 paper-id 或目录路径
+- **必须**在 prompt 中包含笔记写入指令（见下方模板）
+- 如果是重复性查询（同一篇论文），先检查 `notes.md` 是否已有答案
+
+**Subagent prompt 模板（主 agent 分派时必须包含以下段落）：**
+
+```
+分析论文 "<paper-id>"，回答以下问题：<具体问题>
+
+工作流程：
+1. 先运行 `scholaraio show "<paper-id>" --layer <N>` 查看论文（已有笔记会自动展示，优先复用，但笔记可能有偏差——结论存疑时回原文验证）
+2. 完成分析后，**必须**运行以下命令将关键发现写入笔记：
+   scholaraio show "<paper-id>" --append-notes "## YYYY-MM-DD | <来源> | <分析类型>
+   - 发现 1
+   - 发现 2"
+3. 返回精炼结论（T1），不要包含搜索过程
+```
 
 **Context 管理原则：**
 - 工作区论文列表（>30 篇）、论文全文（L4）等大体量内容应由 subagent 处理，仅将结论带回主 context
@@ -416,6 +441,7 @@ Skills 安装后以 `/scholaraio:search`、`/scholaraio:show` 等命名空间形
 ## 关键约定
 
 - **工作区隔离**：用户的写作、笔记、草稿等输出内容一律放在 `workspace/` 目录。创建新文件时（如文献综述、调研笔记），默认放在 `workspace/` 下，不要在项目根目录或 `scholaraio/` 源码目录下创建用户内容文件
+- **工作区版本管理**：涉及代码开发的 workspace 子目录（如复现项目、数据分析脚本）应使用 `git init` 进行内部版本管理，并添加 `.gitignore` 排除 `__pycache__/`、`.venv/`、大型数据文件等。这不影响 scholaraio 主仓库（`workspace/` 已在主 `.gitignore` 中）
 - **不修改 metadata/_extract.py 的正则逻辑**，只通过 extractor 抽象层扩展
 - `data/`、`workspace/` 不进 git（.gitignore 已配置）
 - Python 3.10+，运行环境：conda `scholaraio`

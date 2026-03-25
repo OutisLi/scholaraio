@@ -45,3 +45,21 @@ scholaraio show "<paper-id>" --layer <N>
 
 用户说："这篇论文的结论是什么"（上下文中已有论文 ID）
 → 执行 `show "<paper-id>" --layer 3`
+
+## T2 笔记集成
+
+`show` 命令会自动展示该论文已有的 agent 笔记（`notes.md`）。笔记来自之前的分析会话，包含已提取的关键发现。
+
+**读取规则**：
+- 调用 `show` 时如果论文有 `notes.md`，内容会显示在标题之后、正文之前
+- Agent 应优先利用笔记中的现有信息，避免重复分析
+
+**写入规则**：
+- 当 agent（或 subagent）通过 `show` 阅读论文并进行了分析，**必须**将值得跨会话保留的发现写入 `notes.md`：
+```bash
+scholaraio show "<paper-id>" --append-notes "## 2025-03-25 | ghia-cavity | 参数提取
+- 收敛判据：RMS 残差 < 1e-4
+- Re=400 用 257x257 网格
+- dt=inf for Re<=3200, dt=0.1 for Re=10000"
+```
+- 笔记格式：`## YYYY-MM-DD | workspace/任务来源 | 分析类型`

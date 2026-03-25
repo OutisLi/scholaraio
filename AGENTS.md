@@ -54,12 +54,37 @@ When the main agent delegates paper analysis to a subagent, information flows at
 - Storage path: `data/papers/<Author-Year-Title>/notes.md`
 - Each analysis appends a section: `## YYYY-MM-DD | <workspace or task source> | <skill name>`
 - Content includes: key findings, methodological highlights, comparisons with other papers, notable limitations
-- Code API: `loader.load_notes(paper_dir)` to read, `loader.append_notes(paper_dir, section)` to append
+- CLI: `scholaraio show "<paper-id>" --append-notes "## ..."` to write; `scholaraio show` auto-displays existing notes
+- Python API: `loader.load_notes(paper_dir)` to read, `loader.append_notes(paper_dir, section)` to incrementally append
 
 **Subagent Workflow:**
-1. Before analyzing a paper, check for existing notes via `load_notes()` — reuse prior findings to avoid redundant work
-2. After analysis, persist cross-session-worthy discoveries via `append_notes()` to `notes.md`
+1. Before analyzing a paper, run `scholaraio show "<paper-id>" --layer 1` — this automatically shows existing notes; reuse prior findings to avoid redundant work. However, notes are prior agent analysis and may contain omissions, bias, or outdated conclusions — treat them critically; when notes are highly relevant to the current task or their conclusions seem questionable, go back to the original text (L3/L4) to cross-verify
+2. After analysis, **MUST** persist cross-session-worthy discoveries:
+   ```bash
+   scholaraio show "<paper-id>" --append-notes "## YYYY-MM-DD | <source> | <type>
+   - finding 1
+   - finding 2"
+   ```
 3. The T1 response returned to the main agent contains only refined conclusions, not search process details
+
+**When dispatching subagents to read papers, the main agent MUST:**
+- Include the paper-id or directory path in the subagent prompt
+- **MUST** include the notes-writing instruction in the prompt (see template below)
+- For repeated queries on the same paper, check `notes.md` first
+
+**Subagent prompt template (main agent MUST include the following paragraph when dispatching):**
+
+```
+Analyze paper "<paper-id>" and answer: <specific question>
+
+Workflow:
+1. Run `scholaraio show "<paper-id>" --layer <N>` to view the paper (existing notes auto-displayed, reuse them — but notes may have bias; cross-verify with original text when conclusions seem questionable)
+2. After analysis, you **MUST** run this command to persist key findings:
+   scholaraio show "<paper-id>" --append-notes "## YYYY-MM-DD | <source> | <type>
+   - finding 1
+   - finding 2"
+3. Return refined conclusions only (T1), do not include search process
+```
 
 **Context Management Principles:**
 - Workspace paper lists (>30 papers), full paper text (L4), and other large content should be processed by subagents, returning only conclusions to the main context
@@ -409,6 +434,7 @@ Skills are invoked with namespace prefix: `/scholaraio:search`, `/scholaraio:sho
 ## Key Conventions
 
 - **Workspace isolation**: All user output (writing, notes, drafts) goes in the `workspace/` directory. When creating new files (literature reviews, research notes), default to `workspace/`, not the project root or `scholaraio/` source directory
+- **Workspace version control**: Workspace subdirectories involving code development (reproduction projects, analysis scripts) should use `git init` for internal version management with a `.gitignore` excluding `__pycache__/`, `.venv/`, large data files, etc. This does not affect the main scholaraio repo (`workspace/` is in the main `.gitignore`)
 - **Do not modify `metadata/_extract.py` regex logic** — extend only through the extractor abstraction layer
 - `data/`, `workspace/` are not tracked in git (.gitignore configured)
 - Python 3.10+, runtime environment: conda `scholaraio`

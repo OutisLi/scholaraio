@@ -33,7 +33,7 @@ tags: ["academic", "writing", "peer-review", "rebuttal"]
 对每条意见：
 1. 理解审稿人的核心诉求
 2. 在原稿中定位相关段落
-3. 检查相关论文的 `notes.md`（历史分析笔记），复用已有发现
+3. 用 `scholaraio show` 查看论文（已有 `notes.md` 笔记会自动展示），复用已有发现
 4. 在工作区文献中搜索支撑证据：
    ```bash
    scholaraio ws search <name> "<审稿人关注的关键词>"
@@ -72,7 +72,11 @@ tags: ["academic", "writing", "peer-review", "rebuttal"]
 ### 4. 输出
 
 - 保存回复信到 `workspace/<name>/response-letter.md`
-- 将深度分析的论文关键发现追加到 `notes.md`（通过 `loader.append_notes()`），格式：`## YYYY-MM-DD | <workspace> | review-response`
+- **必须**通过 CLI 将深度分析的论文关键发现写入笔记：
+  ```bash
+  scholaraio show "<paper-id>" --append-notes "## YYYY-MM-DD | <workspace> | review-response
+  - 关键发现"
+  ```
 - 如需补充引用新论文到工作区：
   ```bash
   scholaraio ws add <name> <paper-id>
