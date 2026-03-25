@@ -252,14 +252,27 @@ def cmd_show(args: argparse.Namespace, cfg) -> None:
 
     # Handle --append-notes (append, then continue to show content)
     if getattr(args, "append_notes", None):
-        append_notes(paper_d, args.append_notes)
-        ui(f"已追加笔记到 {paper_d.name}/notes.md")
+        notes_text = str(args.append_notes).strip()
+        if not notes_text:
+            ui("警告：--append-notes 内容为空，已忽略。")
+        else:
+            try:
+                append_notes(paper_d, notes_text)
+            except (UnicodeDecodeError, OSError) as e:
+                _log.error("追加笔记失败：%s", e)
+                ui(f"追加笔记到 {paper_d.name}/notes.md 失败：{e}")
+            else:
+                ui(f"已追加笔记到 {paper_d.name}/notes.md")
 
     l1 = load_l1(json_path)
     _print_header(l1)
 
     # Show existing agent notes (T2 layer) if available
-    notes = load_notes(paper_d)
+    try:
+        notes = load_notes(paper_d)
+    except (UnicodeDecodeError, OSError) as e:
+        _log.warning("读取 notes.md 失败：%s", e)
+        notes = None
     if notes:
         ui("\n--- Agent 笔记 (notes.md) ---\n")
         ui(notes)

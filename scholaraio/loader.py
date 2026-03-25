@@ -187,8 +187,8 @@ def append_notes(paper_dir: Path, section: str) -> None:
     notes_path = paper_dir / _NOTES_FILENAME
     section = section.rstrip("\n")
     if notes_path.exists():
-        existing = notes_path.read_text(encoding="utf-8").rstrip("\n")
-        notes_path.write_text(existing + "\n\n" + section + "\n", encoding="utf-8")
+        with open(notes_path, "a", encoding="utf-8") as f:
+            f.write("\n\n" + section + "\n")
     else:
         notes_path.write_text(section + "\n", encoding="utf-8")
     _log.debug("appended notes to %s", notes_path)

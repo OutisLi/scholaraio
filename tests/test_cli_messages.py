@@ -56,6 +56,70 @@ class TestShowLayer4Headings:
         assert "\n--- 全文（原文，paper_fr.md 不存在） ---\n" in messages
 
 
+class TestShowNotesIntegration:
+    def test_notes_displayed_after_header(self, tmp_papers, monkeypatch):
+        paper_dir = tmp_papers / "Smith-2023-Turbulence"
+        (paper_dir / "notes.md").write_text(
+            "## 2026-03-26 | test | analysis\n- Key finding\n", encoding="utf-8"
+        )
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
+        args = Namespace(paper_id="Smith-2023-Turbulence", layer=1)
+
+        cli.cmd_show(args, cfg)
+
+        assert "\n--- Agent 笔记 (notes.md) ---\n" in messages
+        assert any("Key finding" in m for m in messages)
+        assert "\n--- 笔记结束 ---\n" in messages
+
+    def test_no_notes_section_when_file_missing(self, tmp_papers, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
+        args = Namespace(paper_id="Smith-2023-Turbulence", layer=1)
+
+        cli.cmd_show(args, cfg)
+
+        assert "\n--- Agent 笔记 (notes.md) ---\n" not in messages
+
+    def test_append_notes_visible_in_same_show(self, tmp_papers, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
+        args = Namespace(
+            paper_id="Smith-2023-Turbulence",
+            layer=1,
+            append_notes="## 2026-03-26 | test | review\n- Important note",
+        )
+
+        cli.cmd_show(args, cfg)
+
+        assert any("已追加笔记到" in m for m in messages)
+        assert "\n--- Agent 笔记 (notes.md) ---\n" in messages
+        assert any("Important note" in m for m in messages)
+
+    def test_append_notes_empty_ignored(self, tmp_papers, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
+        args = Namespace(paper_id="Smith-2023-Turbulence", layer=1, append_notes="   ")
+
+        cli.cmd_show(args, cfg)
+
+        assert any("内容为空" in m for m in messages)
+        assert not (tmp_papers / "Smith-2023-Turbulence" / "notes.md").exists()
+
+
 class TestSearchResultFormatting:
     def test_print_search_result_omits_empty_extra(self, monkeypatch):
         messages: list[str] = []

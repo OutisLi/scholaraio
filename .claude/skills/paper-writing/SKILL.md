@@ -31,9 +31,13 @@ tags: ["academic", "writing", "research", "sections"]
 
 ### 2. 论文分析笔记复用
 
-在深度阅读工作区论文时，先检查论文目录下是否有 `notes.md`（历史分析笔记）。已有笔记可直接复用，无需重复阅读全文。
+用 `scholaraio show` 阅读工作区论文时，已有的 `notes.md` 历史笔记会自动展示。有则优先复用，无需重复阅读全文。
 
-分析完成后，将新的关键发现追加到论文的 `notes.md`（通过 `loader.append_notes()`）。格式：`## YYYY-MM-DD | <workspace> | paper-writing`。
+分析完成后，**必须**通过 CLI 将新的关键发现写入笔记：
+```bash
+scholaraio show "<paper-id>" --append-notes "## YYYY-MM-DD | <workspace> | paper-writing
+- 关键发现"
+```
 
 ### 3. 各章节写作策略
 
