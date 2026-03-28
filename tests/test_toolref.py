@@ -6,6 +6,7 @@ from scholaraio.toolref import (
     _build_bioinformatics_manifest,
     _build_openfoam_manifest,
     _clean_manifest_text,
+    _expand_search_query,
     _has_local_docs,
     _normalize_search_query,
     _normalize_program_filter,
@@ -30,6 +31,17 @@ def test_normalize_program_filter_for_non_qe():
 def test_normalize_search_query_rewrites_punctuation_runs():
     assert _normalize_search_query("k-point/convergence") == "k point convergence"
     assert _normalize_search_query("  spike__rbd ") == "spike rbd"
+
+
+def test_expand_search_query_adds_openfoam_aliases():
+    expanded = _expand_search_query("openfoam", "drag coefficient")
+    assert "forces" in expanded
+    assert "forcecoeffs" in expanded
+
+
+def test_expand_search_query_adds_bioinformatics_aliases():
+    expanded = _expand_search_query("bioinformatics", "phylogenetic tree")
+    assert "iqtree" in expanded
 
 
 def test_build_openfoam_manifest_uses_requested_version():

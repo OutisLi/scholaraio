@@ -201,6 +201,26 @@ def _normalize_search_query(query: str) -> str:
     return normalized or query.strip()
 
 
+def _expand_search_query(tool: str, query: str) -> str:
+    normalized = _normalize_search_query(query).lower()
+    expansions: list[str] = [normalized]
+
+    if tool == "openfoam":
+        if "drag coefficient" in normalized or "drag coefficients" in normalized:
+            expansions.extend(["forces", "force coeffs", "forcecoeffs"])
+        if "q criterion" in normalized:
+            expansions.extend(["function objects", "post processing", "q"])
+    elif tool == "bioinformatics":
+        if "phylogenetic tree" in normalized:
+            expansions.extend(["iqtree", "mafft", "phylogenetics"])
+
+    deduped: list[str] = []
+    for item in expansions:
+        if item and item not in deduped:
+            deduped.append(item)
+    return " OR ".join(deduped) if len(deduped) > 1 else deduped[0]
+
+
 def _build_openfoam_manifest(version: str) -> list[dict]:
     base = f"https://doc.openfoam.com/{version}"
     return [
@@ -1590,11 +1610,15 @@ def toolref_search(
     conn.row_factory = sqlite3.Row
 
     normalized_query = _normalize_search_query(query)
+    expanded_query = _expand_search_query(tool, query)
 
     # build FTS5 query — auto-convert spaces to OR for better recall
-    fts_query = normalized_query
-    if " " in normalized_query and not any(kw in normalized_query.upper() for kw in ("OR", "AND", "NOT", '"')):
-        words = normalized_query.split()
+    fts_query = expanded_query
+    if (
+        " " in expanded_query
+        and not any(kw in expanded_query.upper() for kw in ("OR", "AND", "NOT", '"'))
+    ):
+        words = expanded_query.split()
         fts_query = " OR ".join(words)
 
     try:
