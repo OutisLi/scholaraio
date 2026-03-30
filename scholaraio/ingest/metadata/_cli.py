@@ -142,7 +142,12 @@ def cmd_batch(args: argparse.Namespace) -> None:
 
     succeeded = 0
     failed = 0
-    api_delay = 3.0 if not args.no_api else 0  # polite delay to avoid S2 rate limit
+    # Polite delay: with S2 API key, requests are authenticated (1 req/s allowed);
+    # without key, public rate limit is tight (100 req/5min), so wait longer.
+    from ._models import SESSION
+
+    _has_s2_key = bool(SESSION.headers.get("x-api-key"))
+    api_delay = (1.0 if _has_s2_key else 3.0) if not args.no_api else 0  # polite delay to avoid S2 rate limit
 
     for i, filepath in enumerate(targets, 1):
         _log.info("[%d/%d] %s", i, total, filepath.name)
@@ -277,6 +282,17 @@ def main() -> None:
     p_fix.add_argument("--no-api", action="store_true", help="Skip API queries")
 
     args = parser.parse_args()
+
+    # Ensure S2 API key is configured for standalone CLI usage
+    # (the main scholaraio CLI does this in cli.py; this covers
+    # `python -m scholaraio.ingest.metadata` invocations.)
+    from scholaraio.config import load_config
+
+    from ._models import configure_s2_session
+
+    _cfg = load_config()
+    configure_s2_session(_cfg.resolved_s2_api_key())
+
     if args.command == "show":
         cmd_show(args)
     elif args.command == "extract":

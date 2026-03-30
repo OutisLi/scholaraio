@@ -161,6 +161,14 @@ def configure_session(contact_email: str) -> None:
         SESSION.headers["User-Agent"] = f"ScholarAIO/1.0 (mailto:{contact_email})"
 
 
+def configure_s2_session(s2_api_key: str) -> None:
+    """Set Semantic Scholar API key header for higher rate limits."""
+    if s2_api_key:
+        SESSION.headers["x-api-key"] = s2_api_key
+    else:
+        SESSION.headers.pop("x-api-key", None)
+
+
 # Retry on connection/SSL errors (common in WSL2 or when hitting APIs rapidly)
 _retry = requests.adapters.HTTPAdapter(
     max_retries=requests.packages.urllib3.util.retry.Retry(

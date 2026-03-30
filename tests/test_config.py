@@ -176,6 +176,25 @@ class TestResolvedApiKey:
         monkeypatch.setenv("MINERU_API_KEY", "mu-env")
         assert cfg.resolved_mineru_api_key() == "mu-env"
 
+    def test_s2_key_from_config(self, tmp_path):
+        cfg = _build_config({"ingest": {"s2_api_key": "s2-cfg"}}, tmp_path)
+        assert cfg.resolved_s2_api_key() == "s2-cfg"
+
+    def test_s2_key_from_env(self, tmp_path, monkeypatch):
+        cfg = _build_config({}, tmp_path)
+        monkeypatch.setenv("S2_API_KEY", "s2-env")
+        assert cfg.resolved_s2_api_key() == "s2-env"
+
+    def test_s2_key_config_wins_over_env(self, tmp_path, monkeypatch):
+        cfg = _build_config({"ingest": {"s2_api_key": "s2-cfg"}}, tmp_path)
+        monkeypatch.setenv("S2_API_KEY", "s2-env")
+        assert cfg.resolved_s2_api_key() == "s2-cfg"
+
+    def test_s2_key_empty_when_unset(self, tmp_path, monkeypatch):
+        cfg = _build_config({}, tmp_path)
+        monkeypatch.delenv("S2_API_KEY", raising=False)
+        assert cfg.resolved_s2_api_key() == ""
+
 
 class TestLoadConfig:
     def test_load_from_explicit_path(self, tmp_path):

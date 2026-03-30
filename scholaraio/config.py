@@ -156,6 +156,8 @@ class IngestConfig:
             - ``"verify"``：正则成功后仍由 LLM 校验/修正，失败时 LLM 直接提取。
 
         contact_email: Crossref polite pool 联系邮箱（User-Agent），建议放 config.local.yaml。
+        s2_api_key: Semantic Scholar API 密钥，有 key 可大幅提升限速（1 req/s vs 100 req/5min）。
+            建议放 config.local.yaml 或环境变量 ``S2_API_KEY``。
         chunk_page_limit: 超长 PDF 自动切分的页数阈值。超过此值的 PDF 在 MinerU
             转换前自动拆分为多个短 PDF，转换后合并为单个 Markdown。
         mineru_batch_size: MinerU 云 API 每批提交文件数上限，默认 20。
@@ -167,6 +169,7 @@ class IngestConfig:
     mineru_api_key: str = ""
     abstract_llm_mode: str = "verify"  # off | fallback | verify
     contact_email: str = ""
+    s2_api_key: str = ""  # Semantic Scholar API key for higher rate limits
     chunk_page_limit: int = 100  # auto-split PDFs exceeding this page count
     mineru_batch_size: int = 20  # cloud batch size per request
 
@@ -337,6 +340,18 @@ class Config:
             return self.ingest.mineru_api_key
         return os.environ.get("MINERU_API_KEY", "")
 
+    def resolved_s2_api_key(self) -> str:
+        """按优先级查找 Semantic Scholar API key。
+
+        查找顺序: config ``ingest.s2_api_key`` → 环境变量 ``S2_API_KEY``。
+
+        Returns:
+            API key 字符串，未找到则返回空字符串。
+        """
+        if self.ingest.s2_api_key:
+            return self.ingest.s2_api_key
+        return os.environ.get("S2_API_KEY", "")
+
 
 # ============================================================================
 #  Loading
@@ -442,6 +457,7 @@ def _build_config(data: dict, root: Path) -> Config:
         mineru_api_key=ingest_data.get("mineru_api_key") or "",
         abstract_llm_mode=ingest_data.get("abstract_llm_mode", "verify"),
         contact_email=ingest_data.get("contact_email") or "",
+        s2_api_key=ingest_data.get("s2_api_key") or "",
         mineru_batch_size=int(ingest_data.get("mineru_batch_size") or 20),
         chunk_page_limit=int(ingest_data.get("chunk_page_limit") or 100),
     )
