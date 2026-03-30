@@ -102,6 +102,7 @@ class InboxCtx:
     is_thesis: bool = False  # thesis inbox or LLM-detected thesis
     is_patent: bool = False  # patent inbox or detected patent
     existing_pub_nums: dict[str, Path] | None = None  # patent publication number dedup
+    existing_arxiv_ids: dict[str, Path] | None = None  # arXiv preprint dedup
 
 
 # ============================================================================
@@ -324,7 +325,8 @@ def step_extract(ctx: InboxCtx) -> StepResult:
     extractor = get_extractor(ctx.cfg)
     meta = extractor.extract(ctx.md_path)
     ui(f"Title: {(meta.title or '?')[:80]}")
-    ui(f"Author: {meta.first_author_lastname or '?'} | Year: {meta.year or '?'} | DOI: {meta.doi or 'none'}")
+    doi_or_arxiv = meta.doi or (f"arXiv:{meta.arxiv_id}" if meta.arxiv_id else "none")
+    ui(f"Author: {meta.first_author_lastname or '?'} | Year: {meta.year or '?'} | DOI: {doi_or_arxiv}")
     ctx.meta = meta
     return StepResult.OK
 
@@ -444,8 +446,25 @@ def step_dedup(ctx: InboxCtx) -> StepResult:
             ctx.meta.paper_type = "book"
             ui("检测为书籍，无 DOI 直接入库")
             return StepResult.OK
-        # Not thesis/book/patent -> move to pending
-        _log.debug("no DOI and not thesis/book/patent, moving to pending")
+        # No DOI -> check arXiv preprint (has arXiv ID from extraction or API)
+        if ctx.meta.arxiv_id:
+            arxiv_key = _normalize_arxiv_id(ctx.meta.arxiv_id)
+            if arxiv_key and ctx.existing_arxiv_ids and arxiv_key in ctx.existing_arxiv_ids:
+                existing_json = ctx.existing_arxiv_ids[arxiv_key]
+                _move_to_pending(
+                    ctx,
+                    issue="duplicate",
+                    message="arXiv 预印本与已入库论文重复",
+                    extra={"duplicate_of": existing_json.parent.name, "arxiv_id": arxiv_key},
+                )
+                ctx.status = "duplicate"
+                return StepResult.FAIL
+            if not ctx.meta.paper_type:
+                ctx.meta.paper_type = "preprint"
+            ui(f"检测为 arXiv 预印本（{ctx.meta.arxiv_id}），无 DOI 直接入库")
+            return StepResult.OK
+        # Not thesis/book/patent/arXiv -> move to pending
+        _log.debug("no DOI and not thesis/book/patent/arXiv, moving to pending")
         _move_to_pending(ctx)
         ctx.status = "needs_review"
         return StepResult.FAIL
@@ -555,6 +574,9 @@ def step_ingest(ctx: InboxCtx) -> StepResult:
     if ctx.meta.publication_number and ctx.meta.publication_number.strip():
         if ctx.existing_pub_nums is not None:
             ctx.existing_pub_nums[ctx.meta.publication_number.upper().strip()] = new_json
+    arxiv_key = _normalize_arxiv_id(ctx.meta.arxiv_id)
+    if arxiv_key and ctx.existing_arxiv_ids is not None:
+        ctx.existing_arxiv_ids[arxiv_key] = new_json
 
     # Update papers_registry immediately so UUID lookup works before rebuild
     _update_registry(ctx.cfg, ctx.meta, paper_d.name)
@@ -842,6 +864,7 @@ def _process_inbox(
     is_thesis: bool = False,
     is_patent: bool = False,
     existing_pub_nums: dict[str, Path] | None = None,
+    existing_arxiv_ids: dict[str, Path] | None = None,
 ) -> None:
     """处理单个 inbox 目录中的所有文件。
 
@@ -858,6 +881,7 @@ def _process_inbox(
         is_thesis: 是否为 thesis inbox（跳过 DOI 去重，标记 paper_type）。
         is_patent: 是否为 patent inbox（跳过 DOI 去重，用公开号去重）。
         existing_pub_nums: 已入库专利公开号映射（用于去重）。
+        existing_arxiv_ids: 已入库 arXiv ID 映射（用于预印本去重）。
     """
     if not inbox_dir.exists():
         return
@@ -1013,6 +1037,7 @@ def _process_inbox(
             is_thesis=is_thesis,
             is_patent=is_patent,
             existing_pub_nums=existing_pub_nums,
+            existing_arxiv_ids=existing_arxiv_ids,
         )
         for step_name in file_steps:
             with timer(f"pipeline.inbox.{step_name}", "step") as t:
@@ -1111,7 +1136,7 @@ def run_pipeline(
 
     # ---- Inbox scope ----
     if inbox_steps:
-        existing_dois, existing_pub_nums = _collect_existing_ids(papers_dir)
+        existing_dois, existing_pub_nums, existing_arxiv_ids = _collect_existing_ids(papers_dir)
 
         # Process regular inbox
         _result = _process_inbox(
@@ -1126,6 +1151,7 @@ def run_pipeline(
             ingested_jsons,
             is_thesis=False,
             existing_pub_nums=existing_pub_nums,
+            existing_arxiv_ids=existing_arxiv_ids,
         )
 
         # Process thesis inbox (data/inbox-thesis/)
@@ -1143,6 +1169,7 @@ def run_pipeline(
                 ingested_jsons,
                 is_thesis=True,
                 existing_pub_nums=existing_pub_nums,
+                existing_arxiv_ids=existing_arxiv_ids,
             )
 
         # Process patent inbox (data/inbox-patent/)
@@ -1160,6 +1187,7 @@ def run_pipeline(
                 ingested_jsons,
                 is_patent=True,
                 existing_pub_nums=existing_pub_nums,
+                existing_arxiv_ids=existing_arxiv_ids,
             )
 
         # Process document inbox (data/inbox-doc/)
@@ -1179,6 +1207,7 @@ def run_pipeline(
                 ingested_jsons,
                 is_thesis=False,
                 existing_pub_nums=existing_pub_nums,
+                existing_arxiv_ids=existing_arxiv_ids,
             )
 
     # ---- Papers scope ----
@@ -1316,7 +1345,7 @@ def import_external(
     """
     papers_dir = cfg.papers_dir
     pending_dir = cfg._root / "data" / "pending"
-    existing_dois, existing_pub_nums = _collect_existing_ids(papers_dir)
+    existing_dois, existing_pub_nums, existing_arxiv_ids = _collect_existing_ids(papers_dir)
 
     opts: dict[str, Any] = {"dry_run": dry_run, "no_api": no_api}
     stats: dict[str, int] = {"ingested": 0, "duplicate": 0, "needs_review": 0, "failed": 0, "skipped": 0}
@@ -1340,6 +1369,7 @@ def import_external(
             papers_dir=papers_dir,
             existing_dois=existing_dois,
             existing_pub_nums=existing_pub_nums,
+            existing_arxiv_ids=existing_arxiv_ids,
             cfg=cfg,
             opts=opts,
             pending_dir=pending_dir,
@@ -1618,19 +1648,21 @@ def _batch_postprocess(
     step_index(cfg.papers_dir, cfg, {"dry_run": False, "rebuild": False})
 
 
-def _collect_existing_ids(papers_dir: Path) -> tuple[dict[str, Path], dict[str, Path]]:
-    """Collect existing DOIs and patent publication numbers for dedup.
+def _collect_existing_ids(papers_dir: Path) -> tuple[dict[str, Path], dict[str, Path], dict[str, Path]]:
+    """Collect existing DOIs, patent publication numbers, and arXiv IDs for dedup.
 
     Returns:
-        (dois, pub_nums) — DOIs map lowercase key → json_path,
-        pub_nums map uppercase key → json_path.
+        (dois, pub_nums, arxiv_ids) — DOI map lowercase key → json_path,
+        pub_nums map uppercase key → json_path,
+        arxiv_ids map normalized key → json_path.
     """
     from scholaraio.papers import iter_paper_dirs
 
     dois: dict[str, Path] = {}
     pub_nums: dict[str, Path] = {}
+    arxiv_ids: dict[str, Path] = {}
     if not papers_dir.exists():
-        return dois, pub_nums
+        return dois, pub_nums, arxiv_ids
     for pdir in iter_paper_dirs(papers_dir):
         json_path = pdir / "meta.json"
         try:
@@ -1641,15 +1673,34 @@ def _collect_existing_ids(papers_dir: Path) -> tuple[dict[str, Path], dict[str, 
             pub_num = (data.get("ids") or {}).get("patent_publication_number", "")
             if pub_num and pub_num.strip():
                 pub_nums[pub_num.upper().strip()] = json_path
+            arxiv_id = data.get("arxiv_id") or (data.get("ids") or {}).get("arxiv", "")
+            arxiv_key = _normalize_arxiv_id(arxiv_id)
+            if arxiv_key:
+                arxiv_ids[arxiv_key] = json_path
         except Exception as e:
             _log.debug("failed to read %s: %s", json_path.name, e)
-    return dois, pub_nums
+    return dois, pub_nums, arxiv_ids
 
 
 def _collect_existing_dois(papers_dir: Path) -> dict[str, Path]:
     """Backward-compatible wrapper returning only DOIs."""
-    dois, _ = _collect_existing_ids(papers_dir)
+    dois, _, _ = _collect_existing_ids(papers_dir)
     return dois
+
+
+def _normalize_arxiv_id(arxiv_id: str) -> str:
+    """Normalize arXiv IDs for duplicate detection.
+
+    Removes optional ``arXiv:`` prefix, trims whitespace, lowercases, and strips
+    version suffixes such as ``v2`` so multiple versions map to the same record.
+    """
+    key = (arxiv_id or "").strip()
+    if not key:
+        return ""
+    if key.lower().startswith("arxiv:"):
+        key = key.split(":", 1)[1]
+    key = key.strip().lower()
+    return re.sub(r"v\d+$", "", key)
 
 
 def _parse_detect_json(text: str) -> dict:

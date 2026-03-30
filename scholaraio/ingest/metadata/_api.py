@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import requests
 
@@ -30,18 +30,22 @@ _log = logging.getLogger(__name__)
 # ============================================================================
 
 
-def query_semantic_scholar(doi: str = "", title: str = "") -> dict:
+def query_semantic_scholar(doi: str = "", title: str = "", arxiv_id: str = "") -> dict:
     """查询 Semantic Scholar API。
 
     Args:
         doi: DOI 标识符（优先使用）。
-        title: 论文标题（DOI 为空时用于搜索）。
+        arxiv_id: arXiv 标识符（如 ``2401.12345``，DOI 为空时使用）。
+        title: 论文标题（DOI 和 arXiv ID 均为空时用于搜索）。
 
     Returns:
         API 返回的论文数据字典，未找到时返回空字典。
     """
     if doi:
         url = f"{S2_BASE}/DOI:{doi}?fields={S2_FIELDS}"
+    elif arxiv_id:
+        paper_id = quote(f"arXiv:{arxiv_id}", safe="")
+        url = f"{S2_BASE}/{paper_id}?fields={S2_FIELDS}"
     elif title:
         params = {"query": title, "limit": "3", "fields": S2_FIELDS}
         url = f"{S2_BASE}/search?{urlencode(params)}"
@@ -307,6 +311,21 @@ def enrich_metadata(meta: PaperMetadata) -> PaperMetadata:
             else:
                 meta.extraction_method = "doi_lookup"
 
+    # ---- Tier 1.5: arXiv ID lookup via S2 (if no DOI but has arXiv ID) ----
+    if not cr_data and not s2_data and not oa_data and meta.arxiv_id:
+        _log.debug("Trying arXiv ID lookup: %s", meta.arxiv_id)
+        s2_data = query_semantic_scholar(arxiv_id=meta.arxiv_id)
+        if s2_data:
+            # S2 may return a DOI for the published version
+            ext_ids = s2_data.get("externalIds") or {}
+            if ext_ids.get("DOI") and not meta.doi:
+                meta.doi = ext_ids["DOI"]
+                _log.debug("arXiv → DOI resolved: %s", meta.doi)
+                # Now do full DOI lookup with all 3 APIs
+                cr_data = query_crossref(doi=meta.doi)
+                oa_data = query_openalex(doi=meta.doi)
+            meta.extraction_method = "arxiv_lookup"
+
     # ---- Tier 2: Title search via Crossref + OA (no rate limit) ----
     if not cr_data and not s2_data and not oa_data and meta.title:
         _log.debug("No DOI match, trying title search")
@@ -418,8 +437,11 @@ def enrich_metadata(meta: PaperMetadata) -> PaperMetadata:
         meta.api_sources.append("semantic_scholar")
         meta.citation_count_s2 = s2_data.get("citationCount")
         meta.s2_paper_id = s2_data.get("paperId", "")
-        if not meta.doi and s2_data.get("externalIds", {}).get("DOI"):
-            meta.doi = s2_data["externalIds"]["DOI"]
+        ext_ids = s2_data.get("externalIds") or {}
+        if not meta.doi and ext_ids.get("DOI"):
+            meta.doi = ext_ids["DOI"]
+        if not meta.arxiv_id and ext_ids.get("ArXiv"):
+            meta.arxiv_id = ext_ids["ArXiv"]
         # Title: override only if Crossref didn't provide one
         if not cr_data and s2_data.get("title"):
             meta.title = s2_data["title"]
