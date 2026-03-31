@@ -39,7 +39,14 @@ def test_load_model_sets_hf_endpoint_before_sentence_transformers_import(tmp_pat
     monkeypatch.setattr(vectors, "_resolve_model_path", lambda *args: None)
     vectors._model_cache.clear()
 
-    model = vectors._load_model(cfg)
+    prev_hf_endpoint = os.environ.get("HF_ENDPOINT")
+    try:
+        model = vectors._load_model(cfg)
+    finally:
+        if prev_hf_endpoint is None:
+            monkeypatch.delenv("HF_ENDPOINT", raising=False)
+        else:
+            monkeypatch.setenv("HF_ENDPOINT", prev_hf_endpoint)
 
     assert seen["hf_endpoint_at_import"] == "https://hf-mirror.example"
     assert model.model_name == "test-model"
