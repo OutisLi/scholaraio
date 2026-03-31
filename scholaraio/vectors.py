@@ -75,11 +75,18 @@ def _load_model(cfg: Config | None = None):
         cache_dir = os.path.expanduser(cfg.embed.cache_dir)
         device_cfg = cfg.embed.device
         source = cfg.embed.source
+        hf_endpoint = cfg.embed.hf_endpoint
     else:
         model_name = "Qwen/Qwen3-Embedding-0.6B"
         cache_dir = os.path.expanduser("~/.cache/modelscope/hub/models")
         device_cfg = "auto"
         source = "modelscope"
+        hf_endpoint = os.environ.get("SCHOLARAIO_HF_ENDPOINT") or os.environ.get("HF_ENDPOINT") or ""
+
+    if source == "modelscope":
+        os.environ.setdefault("MODELSCOPE_CACHE", cache_dir)
+    if hf_endpoint:
+        os.environ["HF_ENDPOINT"] = hf_endpoint
 
     # Resolve device
     if device_cfg == "auto":
