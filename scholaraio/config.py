@@ -483,7 +483,7 @@ def _bool_or_default(value: object, default: bool) -> bool:
 
 def _normalize_choice(value: object, *, default: str, valid: set[str], field_name: str) -> str:
     """Normalize a string choice with safe fallback."""
-    text = str(value or "").strip()
+    text = str(value or "").strip().lower()
     if not text:
         return default
     if text in valid:
@@ -671,4 +671,10 @@ def _coerce_str_list(value, *, default: list[str]) -> list[str]:
             if text:
                 result.append(text)
         return result or list(default)
-    raise ValueError(f"expected string or list, got {type(value).__name__}")
+    _log.warning(
+        "invalid string-list config value %r (type=%s), fallback to default %r",
+        value,
+        type(value).__name__,
+        default,
+    )
+    return list(default)

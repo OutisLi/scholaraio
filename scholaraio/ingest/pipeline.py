@@ -283,16 +283,16 @@ def step_mineru(ctx: InboxCtx) -> StepResult:
                 )
 
     if result is None or not result.success:
-        err = result.error if result is not None else "MinerU unavailable"
-        _log.warning("MinerU failed, trying fallback parsers: %s", err)
-        ok, parser_name, err = convert_pdf_with_fallback(
+        mineru_err = result.error if result is not None else "MinerU unavailable"
+        _log.warning("MinerU failed, trying fallback parsers: %s", mineru_err)
+        ok, parser_name, fallback_err = convert_pdf_with_fallback(
             pdf_path,
             md_path,
             parser_order=fallback_order,
             auto_detect=fallback_auto_detect,
         )
         if not ok:
-            _log.error("fallback parsers failed: %s", err)
+            _log.error("fallback parsers failed: %s", fallback_err)
             ctx.status = "failed"
             return StepResult.FAIL
         ui(f"MinerU 不可用，已降级使用 {parser_name} 解析。")
