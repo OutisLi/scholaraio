@@ -51,6 +51,47 @@ def test_step_mineru_falls_back_without_cloud_key(tmp_path, monkeypatch):
     assert ctx.md_path.read_text(encoding="utf-8") == "fallback ok\n"
 
 
+def test_step_mineru_skips_page_count_when_mineru_unreachable_and_no_cloud_key(tmp_path, monkeypatch):
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    cfg = Config()
+    monkeypatch.setattr(cfg, "resolved_mineru_api_key", lambda: "")
+
+    ctx = InboxCtx(
+        pdf_path=pdf,
+        inbox_dir=tmp_path,
+        papers_dir=tmp_path / "papers",
+        existing_dois={},
+        cfg=cfg,
+        opts={},
+    )
+
+    import scholaraio.ingest.mineru as mineru
+    import scholaraio.ingest.pdf_fallback as pdf_fallback
+
+    def _page_count(*_args, **_kwargs):
+        raise AssertionError("page count should not be queried when MinerU is unreachable without cloud key")
+
+    monkeypatch.setattr(mineru, "check_server", lambda *_: False)
+    monkeypatch.setattr(mineru, "_get_pdf_page_count", _page_count)
+    monkeypatch.setattr(
+        pdf_fallback,
+        "convert_pdf_with_fallback",
+        lambda _pdf, md_path, **_kwargs: (
+            md_path.write_text("fallback ok\n", encoding="utf-8"),
+            True,
+            "pymupdf",
+            None,
+        )[1:],
+    )
+
+    result = step_mineru(ctx)
+
+    assert result == StepResult.OK
+    assert ctx.md_path == tmp_path / "paper.md"
+
+
 def test_batch_convert_pdfs_falls_back_without_cloud_key(tmp_path, monkeypatch):
     paper_dir = tmp_path / "papers" / "Smith-2023-Test"
     paper_dir.mkdir(parents=True)

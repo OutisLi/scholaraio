@@ -245,6 +245,26 @@ def step_mineru(ctx: InboxCtx) -> StepResult:
         ctx.md_path = md_path
         return StepResult.OK
 
+    local_mineru_available = check_server(ctx.cfg.ingest.mineru_endpoint)
+    cloud_api_key = ""
+    if not local_mineru_available:
+        cloud_api_key = ctx.cfg.resolved_mineru_api_key()
+        if not cloud_api_key:
+            _log.warning("MinerU unreachable and no cloud API key, trying fallback parsers")
+            ok, parser_name, fallback_err = convert_pdf_with_fallback(
+                pdf_path,
+                md_path,
+                parser_order=fallback_order,
+                auto_detect=fallback_auto_detect,
+            )
+            if not ok:
+                _log.error("fallback parsers failed: %s", fallback_err)
+                ctx.status = "failed"
+                return StepResult.FAIL
+            ui(f"MinerU 不可用，已降级使用 {parser_name} 解析。")
+            ctx.md_path = md_path
+            return StepResult.OK
+
     chunk_limit = getattr(ctx.cfg.ingest, "chunk_page_limit", 100)
     page_count = _get_pdf_page_count(pdf_path)
     is_long = page_count > chunk_limit
@@ -253,34 +273,30 @@ def step_mineru(ctx: InboxCtx) -> StepResult:
         ui(f"Long PDF detected ({page_count} pages > {chunk_limit} limit), splitting...")
 
     # Try local MinerU first, fallback to cloud API
-    if check_server(ctx.cfg.ingest.mineru_endpoint):
+    if local_mineru_available:
         if is_long:
             result = _convert_long_pdf(pdf_path, mineru_opts, chunk_size=chunk_limit)
         else:
             result = convert_pdf(pdf_path, mineru_opts)
     else:
-        api_key = ctx.cfg.resolved_mineru_api_key()
-        if not api_key:
-            _log.warning("MinerU unreachable and no cloud API key, trying fallback parsers")
-        else:
-            from scholaraio.ingest.mineru import convert_pdf_cloud
+        from scholaraio.ingest.mineru import convert_pdf_cloud
 
-            _log.debug("local MinerU unreachable, using cloud API")
-            if is_long:
-                result = _convert_long_pdf_cloud(
-                    pdf_path,
-                    mineru_opts,
-                    api_key=api_key,
-                    cloud_url=ctx.cfg.ingest.mineru_cloud_url,
-                    chunk_size=chunk_limit,
-                )
-            else:
-                result = convert_pdf_cloud(
-                    pdf_path,
-                    mineru_opts,
-                    api_key=api_key,
-                    cloud_url=ctx.cfg.ingest.mineru_cloud_url,
-                )
+        _log.debug("local MinerU unreachable, using cloud API")
+        if is_long:
+            result = _convert_long_pdf_cloud(
+                pdf_path,
+                mineru_opts,
+                api_key=cloud_api_key,
+                cloud_url=ctx.cfg.ingest.mineru_cloud_url,
+                chunk_size=chunk_limit,
+            )
+        else:
+            result = convert_pdf_cloud(
+                pdf_path,
+                mineru_opts,
+                api_key=cloud_api_key,
+                cloud_url=ctx.cfg.ingest.mineru_cloud_url,
+            )
 
     if result is None or not result.success:
         mineru_err = result.error if result is not None else "MinerU unavailable"

@@ -348,16 +348,22 @@ def _build_docling_command(pdf_path: Path, raw_dir: Path, options: dict[str, Any
     return cmd
 
 
+def _normalized_option_text(options: dict[str, Any], key: str, default: str) -> str:
+    """Normalize benchmark option values like runtime config choices."""
+    text = str(options.get(key, default) or "").strip().lower()
+    return text or default
+
+
 def _run_mineru_cloud(pdf_path: Path, md_path: Path, raw_dir: Path, cfg: RunConfig) -> dict[str, Any]:
     loaded = load_config()
     api_key = str(cfg.options.get("api_key") or loaded.resolved_mineru_api_key())
     cloud_url = str(cfg.options.get("cloud_url") or loaded.ingest.mineru_cloud_url)
     opts = ConvertOptions(
         output_dir=raw_dir,
-        backend=str(cfg.options.get("backend", "pipeline")),
-        cloud_model_version=str(cfg.options.get("cloud_model_version", "")),
-        lang=str(cfg.options.get("lang", "ch")),
-        parse_method=str(cfg.options.get("parse_method", "auto")),
+        backend=_normalized_option_text(cfg.options, "backend", "pipeline"),
+        cloud_model_version=_normalized_option_text(cfg.options, "cloud_model_version", ""),
+        lang=_normalized_option_text(cfg.options, "lang", "ch"),
+        parse_method=_normalized_option_text(cfg.options, "parse_method", "auto"),
         formula_enable=bool(cfg.options.get("formula_enable", True)),
         table_enable=bool(cfg.options.get("table_enable", True)),
         force=True,
@@ -379,11 +385,11 @@ def _run_mineru_cloud(pdf_path: Path, md_path: Path, raw_dir: Path, cfg: RunConf
 def _run_mineru_local(pdf_path: Path, md_path: Path, raw_dir: Path, cfg: RunConfig) -> dict[str, Any]:
     loaded = load_config()
     opts = ConvertOptions(
-        api_url=str(cfg.options.get("api_url", loaded.ingest.mineru_endpoint)),
+        api_url=str(cfg.options.get("api_url", loaded.ingest.mineru_endpoint)).strip(),
         output_dir=raw_dir,
-        backend=str(cfg.options.get("backend", "pipeline")),
-        lang=str(cfg.options.get("lang", "ch")),
-        parse_method=str(cfg.options.get("parse_method", "auto")),
+        backend=_normalized_option_text(cfg.options, "backend", "pipeline"),
+        lang=_normalized_option_text(cfg.options, "lang", "ch"),
+        parse_method=_normalized_option_text(cfg.options, "parse_method", "auto"),
         formula_enable=bool(cfg.options.get("formula_enable", True)),
         table_enable=bool(cfg.options.get("table_enable", True)),
         force=True,

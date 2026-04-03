@@ -153,6 +153,60 @@ def test_run_mineru_cloud_threads_cloud_model_version(tmp_path, monkeypatch):
     assert captured["cloud_model_version"] == "vlm"
 
 
+def test_run_mineru_cloud_normalizes_choice_like_options(tmp_path, monkeypatch):
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    md = tmp_path / "paper.md"
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+
+    captured = {}
+
+    monkeypatch.setattr(bench, "load_config", lambda: Config())
+
+    class DummyResult:
+        def __init__(self, md_path: Path):
+            self.success = True
+            self.error = None
+            self.md_path = md_path
+
+    monkeypatch.setattr(
+        bench,
+        "convert_pdf_cloud",
+        lambda pdf_path, opts, api_key, cloud_url: (
+            captured.setdefault("backend", opts.backend),
+            captured.setdefault("cloud_model_version", opts.cloud_model_version),
+            captured.setdefault("lang", opts.lang),
+            captured.setdefault("parse_method", opts.parse_method),
+            DummyResult(raw_dir / "result.md"),
+        )[-1],
+    )
+    (raw_dir / "result.md").write_text("ok\n", encoding="utf-8")
+
+    result = bench._run_mineru_cloud(
+        pdf,
+        md,
+        raw_dir,
+        bench.RunConfig(
+            parser="mineru-cloud",
+            options={
+                "backend": "Pipeline",
+                "cloud_model_version": "VLM",
+                "lang": " EN ",
+                "parse_method": "OCR",
+            },
+        ),
+    )
+
+    assert result["ok"] is True
+    assert captured == {
+        "backend": "pipeline",
+        "cloud_model_version": "vlm",
+        "lang": "en",
+        "parse_method": "ocr",
+    }
+
+
 def test_run_one_accepts_hyphenated_mineru_cloud_name(tmp_path, monkeypatch):
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4\n")
