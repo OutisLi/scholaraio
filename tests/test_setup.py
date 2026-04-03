@@ -78,14 +78,15 @@ def test_recommend_pdf_parser_prefers_mineru_when_both_reachable():
     parser_name, reason = recommend_pdf_parser(True, True, "zh")
 
     assert parser_name == "MinerU"
-    assert "默认优先推荐 MinerU" in reason
+    assert "MinerU 可用" in reason
+    assert "Hugging Face 也可达" in reason
 
 
 def test_recommend_pdf_parser_prefers_docling_when_only_huggingface_reachable():
     parser_name, reason = recommend_pdf_parser(False, True, "zh")
 
     assert parser_name == "Docling"
-    assert "Hugging Face 可达而 MinerU 不可达" in reason
+    assert "Hugging Face 可达而 MinerU 不可用" in reason
 
 
 def test_run_check_includes_parser_recommendation(monkeypatch):

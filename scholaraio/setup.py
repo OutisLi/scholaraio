@@ -111,8 +111,8 @@ _S: dict[str, dict[Lang, str]] = {
     "parser_choice_mineru": {"en": "  Selected MinerU.", "zh": "  已选择 MinerU。"},
     "parser_choice_docling": {"en": "  Selected Docling.", "zh": "  已选择 Docling。"},
     "parser_choice_auto": {
-        "en": "  Testing MinerU and Hugging Face reachability...",
-        "zh": "  正在测试 MinerU 与 Hugging Face 连通性...",
+        "en": "  Testing MinerU availability and Hugging Face reachability...",
+        "zh": "  正在测试 MinerU 可用性与 Hugging Face 连通性...",
     },
     "parser_choice_auto_configured_mineru": {
         "en": "  Existing MinerU API key detected; treat MinerU as available before network probing.",
@@ -120,6 +120,8 @@ _S: dict[str, dict[Lang, str]] = {
     },
     "reachability_yes": {"en": "reachable", "zh": "可达"},
     "reachability_no": {"en": "unreachable", "zh": "不可达"},
+    "availability_yes": {"en": "available", "zh": "可用"},
+    "availability_no": {"en": "unavailable", "zh": "不可用"},
     "parser_recommend_mineru": {
         "en": "  Suggestion: prefer MinerU. Reason: {reason}",
         "zh": "  建议优先使用 MinerU。原因：{reason}",
@@ -133,20 +135,20 @@ _S: dict[str, dict[Lang, str]] = {
         "zh": "  如果你已经确定要用另一个解析器，也可以直接按你的选择配置。",
     },
     "reason_mineru_only": {
-        "en": "MinerU is reachable while Hugging Face is not.",
-        "zh": "MinerU 可达而 Hugging Face 不可达。",
+        "en": "MinerU is available while Hugging Face is not reachable.",
+        "zh": "MinerU 可用而 Hugging Face 不可达。",
     },
     "reason_hf_only": {
-        "en": "Hugging Face is reachable while MinerU is not.",
-        "zh": "Hugging Face 可达而 MinerU 不可达。",
+        "en": "Hugging Face is reachable while MinerU is not available.",
+        "zh": "Hugging Face 可达而 MinerU 不可用。",
     },
     "reason_both": {
-        "en": "both are reachable; prefer MinerU by default.",
-        "zh": "两者都可达，默认优先推荐 MinerU。",
+        "en": "MinerU is available and Hugging Face is also reachable; prefer MinerU by default.",
+        "zh": "MinerU 可用，且 Hugging Face 也可达；默认优先推荐 MinerU。",
     },
     "reason_neither": {
-        "en": "both checks failed; prefer Docling local deployment because it does not depend on external MinerU service.",
-        "zh": "两者探测都失败；优先推荐 Docling 本地部署，因为它不依赖外部 MinerU 服务。",
+        "en": "MinerU is not available and Hugging Face is not reachable; prefer Docling local deployment because it does not depend on external MinerU service.",
+        "zh": "MinerU 当前不可用，且 Hugging Face 不可达；优先推荐 Docling 本地部署，因为它不依赖外部 MinerU 服务。",
     },
     "mineru_local_prompt": {
         "en": "  Do you plan to deploy MinerU locally?",
@@ -214,11 +216,8 @@ _S: dict[str, dict[Lang, str]] = {
 MINERU_TOKEN_URL = "https://mineru.net/apiManage/token"
 MINERU_DOCS_URL = "https://opendatalab.github.io/MinerU/quick_start/"
 MINERU_DOCKER_URL = "https://opendatalab.github.io/MinerU/quick_start/docker_deployment/"
-MINERU_USAGE_URL = "https://opendatalab.github.io/MinerU/usage/quick_usage/"
-MINERU_GITHUB_URL = "https://github.com/opendatalab/MinerU"
 DOCLING_INSTALL_URL = "https://docling-project.github.io/docling/getting_started/installation/"
 DOCLING_CLI_URL = "https://docling-project.github.io/docling/reference/cli/"
-DOCLING_GITHUB_URL = "https://github.com/docling-project/docling"
 HUGGINGFACE_URL = "https://huggingface.co"
 
 
@@ -473,13 +472,25 @@ def _check_huggingface(lang: Lang) -> tuple[bool, str]:
     return False, "unreachable → Docling or Hugging Face model downloads may fail; prefer MinerU / ModelScope"
 
 
-def recommend_pdf_parser(mineru_ok: bool, huggingface_ok: bool, lang: Lang) -> tuple[str, str]:
-    """Recommend MinerU or Docling from network reachability signals."""
-    if mineru_ok and not huggingface_ok:
+def recommend_pdf_parser(mineru_available: bool, huggingface_reachable: bool, lang: Lang) -> tuple[str, str]:
+    """Recommend MinerU or Docling from availability signals.
+
+    Args:
+        mineru_available: Whether MinerU is usable in the current setup flow.
+            This can come from an existing cloud key, a reachable local service,
+            or a lightweight heuristic used by the setup wizard.
+        huggingface_reachable: Whether Hugging Face is reachable from the
+            current network.
+        lang: Output language.
+
+    Returns:
+        A tuple of ``(recommended_parser, reason)``.
+    """
+    if mineru_available and not huggingface_reachable:
         return "MinerU", t("reason_mineru_only", lang)
-    if huggingface_ok and not mineru_ok:
+    if huggingface_reachable and not mineru_available:
         return "Docling", t("reason_hf_only", lang)
-    if mineru_ok and huggingface_ok:
+    if mineru_available and huggingface_reachable:
         return "MinerU", t("reason_both", lang)
     return "Docling", t("reason_neither", lang)
 
@@ -618,16 +629,16 @@ def _wizard_parser(cfg: Config, lang: Lang) -> ParserChoice:
         return ParserChoice(parser="docling", needs_mineru_key=False)
 
     print(t("parser_choice_auto", lang))
-    mineru_ok = bool(cfg.resolved_mineru_api_key())
-    if mineru_ok:
+    mineru_available = bool(cfg.resolved_mineru_api_key())
+    if mineru_available:
         print(t("parser_choice_auto_configured_mineru", lang))
     else:
-        mineru_ok = _probe_url(MINERU_TOKEN_URL)
+        mineru_available = _probe_url(MINERU_TOKEN_URL)
     hf_ok = _probe_url(HUGGINGFACE_URL)
-    print(f"    MinerU: {t('reachability_yes', lang) if mineru_ok else t('reachability_no', lang)}")
+    print(f"    MinerU: {t('availability_yes', lang) if mineru_available else t('availability_no', lang)}")
     print(f"    Hugging Face: {t('reachability_yes', lang) if hf_ok else t('reachability_no', lang)}")
 
-    parser_name, reason = recommend_pdf_parser(mineru_ok, hf_ok, lang)
+    parser_name, reason = recommend_pdf_parser(mineru_available, hf_ok, lang)
     if parser_name == "MinerU":
         print(t("parser_recommend_mineru", lang).format(reason=reason))
         print(t("parser_recommend_override", lang))

@@ -16,7 +16,7 @@ def test_convert_pdf_with_fallback_uses_first_success(tmp_path, monkeypatch):
         out.write_text("ok\n", encoding="utf-8")
         return True, None
 
-    monkeypatch.setattr(pdf_fallback, "_run_pymupdf", _ok)
+    monkeypatch.setattr(pdf_fallback, "run_pymupdf", _ok)
 
     ok, parser, err = pdf_fallback.convert_pdf_with_fallback(pdf, md, parser_order=["docling", "pymupdf"])
     assert ok is True
@@ -31,7 +31,7 @@ def test_convert_pdf_with_fallback_collects_errors(tmp_path, monkeypatch):
     md = tmp_path / "a.md"
 
     monkeypatch.setattr(pdf_fallback, "_run_docling", lambda *_: (False, "docling bad"))
-    monkeypatch.setattr(pdf_fallback, "_run_pymupdf", lambda *_: (False, "pymupdf bad"))
+    monkeypatch.setattr(pdf_fallback, "run_pymupdf", lambda *_: (False, "pymupdf bad"))
 
     ok, parser, err = pdf_fallback.convert_pdf_with_fallback(pdf, md, parser_order=["docling", "pymupdf"])
     assert ok is False
@@ -47,7 +47,7 @@ def test_pick_and_write_md_picks_longest(tmp_path):
     (out_dir / "big.md").write_text("long markdown", encoding="utf-8")
 
     md = tmp_path / "final.md"
-    ok, err = pdf_fallback._pick_and_write_md(out_dir, md, "docling")
+    ok, err = pdf_fallback.pick_and_write_md(out_dir, md, "docling")
     assert ok is True
     assert err is None
     assert "long markdown" in md.read_text(encoding="utf-8")
@@ -65,11 +65,17 @@ def test_pick_and_write_md_preserves_assets(tmp_path):
     md_dir.mkdir()
     md = md_dir / "paper.md"
 
-    ok, err = pdf_fallback._pick_and_write_md(out_dir, md, "docling")
+    ok, err = pdf_fallback.pick_and_write_md(out_dir, md, "docling")
     assert ok is True
     assert err is None
     assert "![fig](images/figure.png)" in md.read_text(encoding="utf-8")
     assert (md_dir / "images" / "figure.png").read_bytes() == b"pngdata"
+
+
+def test_public_pdf_fallback_helpers_are_available():
+    assert callable(pdf_fallback.run_pymupdf)
+    assert callable(pdf_fallback.pick_and_write_md)
+    assert callable(pdf_fallback.copy_parser_assets)
 
 
 def test_resolve_parser_order_auto(monkeypatch):

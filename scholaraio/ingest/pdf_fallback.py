@@ -43,7 +43,7 @@ def convert_pdf_with_fallback(
             if parser == "docling":
                 ok, err = _run_docling(pdf_path, md_path)
             elif parser == "pymupdf":
-                ok, err = _run_pymupdf(pdf_path, md_path)
+                ok, err = run_pymupdf(pdf_path, md_path)
             else:
                 ok, err = False, f"未知解析器: {parser}"
         except Exception as exc:
@@ -130,10 +130,10 @@ def _run_docling(pdf_path: Path, md_path: Path) -> tuple[bool, str | None]:
         )
         if proc.returncode != 0:
             return False, f"docling 失败: {proc.stderr.strip()[:120] or proc.stdout.strip()[:120]}"
-        return _pick_and_write_md(out_dir, md_path, "docling")
+        return pick_and_write_md(out_dir, md_path, "docling")
 
 
-def _run_pymupdf(pdf_path: Path, md_path: Path) -> tuple[bool, str | None]:
+def run_pymupdf(pdf_path: Path, md_path: Path) -> tuple[bool, str | None]:
     try:
         import fitz
     except ImportError:
@@ -154,7 +154,7 @@ def _run_pymupdf(pdf_path: Path, md_path: Path) -> tuple[bool, str | None]:
         return False, f"PyMuPDF 解析失败: {exc}"
 
 
-def _pick_and_write_md(out_dir: Path, md_path: Path, parser_name: str) -> tuple[bool, str | None]:
+def pick_and_write_md(out_dir: Path, md_path: Path, parser_name: str) -> tuple[bool, str | None]:
     candidates = list(out_dir.rglob("*.md"))
     if not candidates:
         return False, f"{parser_name} 未生成 markdown 输出"
@@ -164,13 +164,13 @@ def _pick_and_write_md(out_dir: Path, md_path: Path, parser_name: str) -> tuple[
     if not content:
         return False, f"{parser_name} 生成 markdown 为空"
 
-    _copy_parser_assets(selected, md_path)
+    copy_parser_assets(selected, md_path)
     md_path.write_text(content + "\n", encoding="utf-8")
     _log.info("fallback parser %s -> %s", parser_name, md_path.name)
     return True, None
 
 
-def _copy_parser_assets(selected_md: Path, md_path: Path) -> None:
+def copy_parser_assets(selected_md: Path, md_path: Path) -> None:
     """Copy assets emitted alongside parser markdown output.
 
     Many parsers write markdown plus sibling asset directories (for example
@@ -189,3 +189,8 @@ def _copy_parser_assets(selected_md: Path, md_path: Path) -> None:
             shutil.copytree(item, target, dirs_exist_ok=True)
         else:
             shutil.copy2(item, target)
+
+
+_run_pymupdf = run_pymupdf
+_pick_and_write_md = pick_and_write_md
+_copy_parser_assets = copy_parser_assets

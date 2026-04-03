@@ -666,18 +666,3 @@ def _coerce_str_list(value, *, default: list[str]) -> list[str]:
         result = [str(item).strip() for item in value if str(item).strip()]
         return result or list(default)
     raise ValueError(f"expected string or list, got {type(value).__name__}")
-
-
-def _coerce_bool(value) -> bool:
-    """Parse booleans from native bool/int values and common string forms."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return bool(value)
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        if lowered in {"1", "true", "yes", "on"}:
-            return True
-        if lowered in {"0", "false", "no", "off"}:
-            return False
-    raise ValueError(f"expected boolean value, got {value!r}")

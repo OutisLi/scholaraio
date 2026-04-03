@@ -16,7 +16,7 @@ from typing import Any
 
 from scholaraio.config import load_config
 from scholaraio.ingest.mineru import ConvertOptions, convert_pdf, convert_pdf_cloud
-from scholaraio.ingest.pdf_fallback import _copy_parser_assets, _pick_and_write_md, _run_pymupdf
+from scholaraio.ingest.pdf_fallback import copy_parser_assets, pick_and_write_md, run_pymupdf
 
 
 @dataclass
@@ -170,7 +170,7 @@ def run_one(pdf_path: Path, cfg: RunConfig, out_dir: Path) -> dict[str, Any]:
     try:
         parser_name = normalize_parser_name(cfg.parser)
         if parser_name == "pymupdf":
-            ok, err = _run_pymupdf(pdf_path, md_path)
+            ok, err = run_pymupdf(pdf_path, md_path)
             entry["ok"] = ok
             entry["error"] = err
         elif parser_name == "mineru_cloud":
@@ -289,7 +289,7 @@ def _run_cli_parser(
         result["ok"] = False
         return result
 
-    ok, err = _pick_and_write_md(raw_dir, md_path, cfg.parser)
+    ok, err = pick_and_write_md(raw_dir, md_path, cfg.parser)
     result["ok"] = ok
     result["error"] = err
     return result
@@ -341,7 +341,7 @@ def _run_mineru_cloud(pdf_path: Path, md_path: Path, raw_dir: Path, cfg: RunConf
     }
     if res.success and res.md_path and res.md_path.exists():
         selected = res.md_path
-        _copy_parser_assets(selected, md_path)
+        copy_parser_assets(selected, md_path)
         md_path.write_text(selected.read_text(encoding="utf-8", errors="ignore"), encoding="utf-8")
     return result
 
@@ -367,7 +367,7 @@ def _run_mineru_local(pdf_path: Path, md_path: Path, raw_dir: Path, cfg: RunConf
     }
     if res.success and res.md_path and res.md_path.exists():
         selected = res.md_path
-        _copy_parser_assets(selected, md_path)
+        copy_parser_assets(selected, md_path)
         md_path.write_text(selected.read_text(encoding="utf-8", errors="ignore"), encoding="utf-8")
     return result
 
