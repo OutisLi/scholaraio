@@ -387,7 +387,7 @@ def step_extract(ctx: InboxCtx) -> StepResult:
     meta = extractor.extract(ctx.md_path)
     ui(f"Title: {(meta.title or '?')[:80]}")
     doi_or_arxiv = meta.doi or (f"arXiv:{meta.arxiv_id}" if meta.arxiv_id else "none")
-    ui(f"Author: {meta.first_author_lastname or '?'} | Year: {meta.year or '?'} | DOI: {doi_or_arxiv}")
+    ui(f"Author: {meta.first_author_lastname or '?'} | Year: {meta.year or '?'} | ID: {doi_or_arxiv}")
     ctx.meta = meta
     return StepResult.OK
 

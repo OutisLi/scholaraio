@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from scholaraio.ingest.metadata._api import query_semantic_scholar
 from scholaraio.ingest.metadata._models import PaperMetadata
-from scholaraio.ingest.pipeline import InboxCtx, StepResult, _collect_existing_ids, step_dedup, step_office_convert
+from scholaraio.ingest.pipeline import InboxCtx, StepResult, _collect_existing_ids, step_dedup, step_extract, step_office_convert
 
 
 class _DummyResponse:
@@ -165,3 +165,38 @@ def test_step_office_convert_reports_scholaraio_office_extra(tmp_path: Path, mon
     assert result == StepResult.FAIL
     assert ctx.status == "failed"
     assert any("pip install scholaraio[office]" in msg for msg in errors)
+
+
+def test_step_extract_labels_arxiv_id_as_generic_id(tmp_path: Path, monkeypatch):
+    md_path = tmp_path / "paper.md"
+    md_path.write_text("# test", encoding="utf-8")
+
+    messages: list[str] = []
+
+    class DummyExtractor:
+        def extract(self, _path: Path) -> PaperMetadata:
+            return PaperMetadata(
+                title="String Junctions and Their Duals in Heterotic String Theory",
+                first_author_lastname="Imamura",
+                year=1999,
+                arxiv_id="hep-th/9901001",
+            )
+
+    monkeypatch.setattr("scholaraio.ingest.pipeline.ui", lambda msg="": messages.append(msg))
+    monkeypatch.setattr("scholaraio.ingest.extractor.get_extractor", lambda cfg: DummyExtractor())
+
+    ctx = InboxCtx(
+        pdf_path=None,
+        inbox_dir=tmp_path,
+        papers_dir=tmp_path / "papers",
+        existing_dois={},
+        cfg=SimpleNamespace(_root=tmp_path),
+        opts={"dry_run": False},
+        md_path=md_path,
+    )
+
+    result = step_extract(ctx)
+
+    assert result == StepResult.OK
+    assert any("ID: arXiv:hep-th/9901001" in msg for msg in messages)
+    assert all("DOI: arXiv:" not in msg for msg in messages)

@@ -53,7 +53,18 @@ def test_build_weekly_read_trend_groups_by_week():
 
     trend = insights.build_weekly_read_trend(events)
 
-    assert trend == [("2026-W09", 2), ("2026-W10", 1)]
+    assert trend == [("2026-W10", 2), ("2026-W11", 1)]
+
+
+def test_build_weekly_read_trend_uses_iso_week_year_at_boundary():
+    events = [
+        {"timestamp": "2021-01-01T10:00:00+00:00"},
+        {"timestamp": "2021-01-04T10:00:00+00:00"},
+    ]
+
+    trend = insights.build_weekly_read_trend(events)
+
+    assert trend == [("2020-W53", 1), ("2021-W01", 1)]
 
 
 def test_cmd_insights_smoke_with_metrics_store(tmp_path: Path, monkeypatch):

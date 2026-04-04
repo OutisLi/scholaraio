@@ -106,7 +106,7 @@ def aggregate_most_read_titles(read_events: list[dict], papers_dir: Path, *, top
 
 
 def build_weekly_read_trend(read_events: list[dict]) -> list[tuple[str, int]]:
-    """Group read events by ISO-like year-week key."""
+    """Group read events by ISO year-week key."""
     week_counts: Counter[str] = Counter()
     for ev in read_events:
         timestamp = ev.get("timestamp", "")
@@ -116,7 +116,8 @@ def build_weekly_read_trend(read_events: list[dict]) -> list[tuple[str, int]]:
             dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         except Exception:
             continue
-        week_counts[dt.strftime("%Y-W%W")] += 1
+        iso = dt.isocalendar()
+        week_counts[f"{iso.year}-W{iso.week:02d}"] += 1
     return sorted(week_counts.items())
 
 
