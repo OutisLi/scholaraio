@@ -407,6 +407,8 @@ def apply_proceedings_split_plan(proceeding_dir: Path, split_plan: dict | Path) 
 
     text = proceeding_md.read_text(encoding="utf-8", errors="replace")
     child_papers = _papers_from_split_plan(text, plan)
+    if not child_papers:
+        raise ValueError("split plan did not produce any child papers")
     papers_dir = proceeding_dir / "papers"
     papers_dir.mkdir(parents=True, exist_ok=True)
 

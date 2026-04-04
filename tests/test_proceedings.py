@@ -544,6 +544,63 @@ def test_pipeline_auto_routes_detected_proceedings_from_main_inbox(tmp_path: Pat
     assert not any((tmp_path / "data" / "papers").iterdir())
 
 
+def test_pipeline_dry_run_proceedings_detection_does_not_write_library(tmp_path: Path, monkeypatch):
+    cfg = _build_config({"ingest": {"extractor": "regex"}}, tmp_path)
+    cfg.ensure_dirs()
+    md_path = tmp_path / "data" / "inbox" / "volume.md"
+    md_path.write_text(
+        "# Proceedings of the IUTAM Symposium on Granular Flow\n\n"
+        "## Table of Contents\n10.1000/example.1\n10.1000/example.2\n\n"
+        "## Paper: Wave propagation in porous media\nAlice Zheng\n10.1000/example.1\nBody\n",
+        encoding="utf-8",
+    )
+
+    messages: list[str] = []
+    monkeypatch.setattr(cli, "ui", lambda message="": messages.append(message))
+    monkeypatch.setattr(pipeline, "ui", lambda message="": messages.append(message))
+
+    run_pipeline(["extract", "dedup", "ingest"], cfg, {"dry_run": True, "no_api": True, "include_aux_inboxes": False})
+
+    assert not any((tmp_path / "data" / "proceedings").iterdir())
+    joined = "\n".join(messages)
+    assert "dry-run 模式下跳过写入" in joined
+
+
+def test_pipeline_does_not_auto_route_thesis_inbox_to_proceedings(tmp_path: Path):
+    cfg = _build_config({"ingest": {"extractor": "regex"}}, tmp_path)
+    cfg.ensure_dirs()
+    md_path = tmp_path / "data" / "inbox-thesis" / "volume.md"
+    md_path.write_text(
+        "# Proceedings of the IUTAM Symposium on Granular Flow\n\n"
+        "## Table of Contents\n10.1000/example.1\n10.1000/example.2\n\n"
+        "Alice Zheng\n\n"
+        "This thesis-like item should stay in the thesis flow.\n",
+        encoding="utf-8",
+    )
+
+    run_pipeline(["extract", "dedup", "ingest"], cfg, {"no_api": True})
+
+    assert any((tmp_path / "data" / "papers").iterdir())
+    assert not any((tmp_path / "data" / "proceedings").iterdir())
+
+
+def test_pipeline_does_not_auto_route_patent_inbox_to_proceedings(tmp_path: Path):
+    cfg = _build_config({"ingest": {"extractor": "regex"}}, tmp_path)
+    cfg.ensure_dirs()
+    md_path = tmp_path / "data" / "inbox-patent" / "volume.md"
+    md_path.write_text(
+        "# Proceedings of the IUTAM Symposium on Granular Flow\n\n"
+        "Publication Number: CN112345678A\n\n"
+        "## Table of Contents\n10.1000/example.1\n10.1000/example.2\n",
+        encoding="utf-8",
+    )
+
+    run_pipeline(["extract", "dedup", "ingest"], cfg, {"no_api": True})
+
+    assert any((tmp_path / "data" / "papers").iterdir())
+    assert not any((tmp_path / "data" / "proceedings").iterdir())
+
+
 def test_pipeline_keeps_regular_paper_in_main_library(tmp_path: Path):
     cfg = _build_config({"ingest": {"extractor": "regex"}}, tmp_path)
     cfg.ensure_dirs()
@@ -650,6 +707,42 @@ def test_cli_proceedings_apply_split_applies_plan_and_reports_success(tmp_path: 
     assert meta["child_paper_count"] == 1
     assert len(child_dirs) == 1
     assert "已应用 proceedings split plan" in joined
+
+
+def test_apply_proceedings_split_plan_rejects_empty_result_without_deleting_existing_papers(tmp_path: Path):
+    proceedings_root = tmp_path / "data" / "proceedings"
+    proceedings_root.mkdir(parents=True, exist_ok=True)
+    md_path = tmp_path / "volume.md"
+    md_path.write_text(
+        "# Proceedings of the IUTAM Symposium on Granular Flow\n\n"
+        "# Wave propagation in porous media\nAlice Zheng\nAbstract. Granular damping in porous waves.\n",
+        encoding="utf-8",
+    )
+    proceeding_dir = ingest_proceedings_markdown(proceedings_root, md_path, source_name="volume.pdf")
+    apply_proceedings_split_plan(
+        proceeding_dir,
+        {
+            "volume_title": "Proceedings of the IUTAM Symposium on Granular Flow",
+            "papers": [{"title": "Wave propagation in porous media", "start_line": 3, "end_line": 4}],
+        },
+    )
+
+    existing_dirs = sorted((proceeding_dir / "papers").iterdir())
+
+    try:
+        apply_proceedings_split_plan(
+            proceeding_dir,
+            {
+                "volume_title": "Broken Plan",
+                "papers": [{"title": "Missing paper", "start_line": 999, "end_line": 1001}],
+            },
+        )
+    except ValueError as exc:
+        assert "did not produce any child papers" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for empty split plan result")
+
+    assert sorted((proceeding_dir / "papers").iterdir()) == existing_dirs
 
 
 def test_build_proceedings_clean_candidates_flags_structural_issues(tmp_path: Path):
