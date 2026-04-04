@@ -262,7 +262,9 @@ def test_convert_pdfs_cloud_batch_retries_upload_timeout_then_succeeds(tmp_path,
     monkeypatch.setattr(requests, "post", fake_post)
     monkeypatch.setattr(requests, "put", fake_put)
     monkeypatch.setattr(requests, "get", fake_get)
-    monkeypatch.setattr("scholaraio.ingest.mineru._download_cloud_result", lambda item, out_dir, download_retries=3: "# ok")
+    monkeypatch.setattr(
+        "scholaraio.ingest.mineru._download_cloud_result", lambda item, out_dir, download_retries=3: "# ok"
+    )
     monkeypatch.setattr("scholaraio.ingest.mineru.time.sleep", lambda _x: None)
 
     results = convert_pdfs_cloud_batch(
@@ -363,7 +365,9 @@ def test_convert_pdfs_cloud_batch_uses_configured_upload_workers(tmp_path, monke
     monkeypatch.setattr(requests, "post", fake_post)
     monkeypatch.setattr(requests, "put", fake_put)
     monkeypatch.setattr(requests, "get", fake_get)
-    monkeypatch.setattr("scholaraio.ingest.mineru._download_cloud_result", lambda item, out_dir, download_retries=3: "# ok")
+    monkeypatch.setattr(
+        "scholaraio.ingest.mineru._download_cloud_result", lambda item, out_dir, download_retries=3: "# ok"
+    )
     monkeypatch.setattr("scholaraio.ingest.mineru.time.sleep", lambda _x: None)
     monkeypatch.setattr("concurrent.futures.ThreadPoolExecutor", DummyPool)
 

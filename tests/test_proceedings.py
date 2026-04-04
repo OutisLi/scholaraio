@@ -3,19 +3,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scholaraio import cli
+from scholaraio.config import _build_config
+from scholaraio.index import build_proceedings_index, search_proceedings
+from scholaraio.ingest.pipeline import run_pipeline
 from scholaraio.ingest.proceedings import (
-    apply_proceedings_split_plan,
     apply_proceedings_clean_plan,
+    apply_proceedings_split_plan,
     build_proceedings_clean_candidates,
     detect_proceedings_from_md,
     ingest_proceedings_markdown,
     looks_like_proceedings_text,
 )
-from scholaraio.ingest.pipeline import run_pipeline
-from scholaraio.index import build_proceedings_index, search_proceedings
 from scholaraio.proceedings import iter_proceedings_papers
-from scholaraio.config import _build_config
-from scholaraio import cli
 
 
 def _write_proceedings_fixture(root: Path) -> Path:
@@ -374,7 +374,10 @@ def test_ingest_proceedings_markdown_prepares_realistic_contents_style_volume(tm
 
     meta = json.loads((proceeding_dir / "meta.json").read_text(encoding="utf-8"))
 
-    assert meta["title"] == "Proceedings of the IUTAM Symposium on Turbulent Structure and Particles-Turbulence Interaction"
+    assert (
+        meta["title"]
+        == "Proceedings of the IUTAM Symposium on Turbulent Structure and Particles-Turbulence Interaction"
+    )
     assert meta["child_paper_count"] == 0
     assert meta["split_status"] == "pending_review"
     assert (proceeding_dir / "split_candidates.json").exists()
@@ -396,7 +399,11 @@ def test_split_candidates_include_case_insensitive_normalized_titles(tmp_path: P
 
     proceeding_dir = ingest_proceedings_markdown(proceedings_root, md_path, source_name="volume.pdf")
     candidates = json.loads((proceeding_dir / "split_candidates.json").read_text(encoding="utf-8"))
-    heading = next(item for item in candidates["headings"] if item["text"] == "Wake of a Finite-Size Particle in Wall Turbulence Over a Rough Bed")
+    heading = next(
+        item
+        for item in candidates["headings"]
+        if item["text"] == "Wake of a Finite-Size Particle in Wall Turbulence Over a Rough Bed"
+    )
 
     assert candidates["normalized_contents_titles"][0] == heading["normalized_text"]
 
@@ -469,7 +476,10 @@ def test_fsearch_proceedings_scope_returns_proceedings_results(tmp_path: Path, m
     proceeding_dir = ingest_proceedings_markdown(proceedings_root, md_path, source_name="volume.pdf")
     apply_proceedings_split_plan(
         proceeding_dir,
-        {"volume_title": "Proceedings of the IUTAM Symposium on Granular Flow", "papers": [{"title": "Wave propagation in porous media", "start_line": 3, "end_line": 6}]},
+        {
+            "volume_title": "Proceedings of the IUTAM Symposium on Granular Flow",
+            "papers": [{"title": "Wave propagation in porous media", "start_line": 3, "end_line": 6}],
+        },
     )
 
     messages: list[str] = []

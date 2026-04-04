@@ -861,7 +861,9 @@ def _flatten_assets(src_dir: Path, out_dir: Path, data_id: str) -> None:
         pass
 
 
-def _download_cloud_result(item: dict, out_dir: Path, *, download_retries: int = DEFAULT_DOWNLOAD_RETRIES) -> str | None:
+def _download_cloud_result(
+    item: dict, out_dir: Path, *, download_retries: int = DEFAULT_DOWNLOAD_RETRIES
+) -> str | None:
     """Download markdown (and images) from cloud API result.
 
     Tries multiple response formats: direct md_content field,

@@ -2111,10 +2111,7 @@ def cmd_proceedings(args: argparse.Namespace, cfg) -> None:
 
         apply_proceedings_split_plan(proceeding_dir, split_plan)
         meta = json.loads((proceeding_dir / "meta.json").read_text(encoding="utf-8"))
-        ui(
-            f"已应用 proceedings split plan: {proceeding_dir.name} "
-            f"({meta.get('child_paper_count', 0)} 篇)"
-        )
+        ui(f"已应用 proceedings split plan: {proceeding_dir.name} ({meta.get('child_paper_count', 0)} 篇)")
         return
 
     if args.proceedings_action == "apply-clean":
@@ -2132,10 +2129,7 @@ def cmd_proceedings(args: argparse.Namespace, cfg) -> None:
 
         apply_proceedings_clean_plan(proceeding_dir, clean_plan)
         meta = json.loads((proceeding_dir / "meta.json").read_text(encoding="utf-8"))
-        ui(
-            f"已应用 proceedings clean plan: {proceeding_dir.name} "
-            f"({meta.get('child_paper_count', 0)} 篇)"
-        )
+        ui(f"已应用 proceedings clean plan: {proceeding_dir.name} ({meta.get('child_paper_count', 0)} 篇)")
         return
 
     ui(f"未知 proceedings 子命令: {args.proceedings_action}")

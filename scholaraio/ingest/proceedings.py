@@ -475,7 +475,9 @@ def ingest_proceedings_markdown(
         "child_paper_count": 0,
         "split_status": "pending_review",
     }
-    (proceeding_dir / "meta.json").write_text(json.dumps(proceeding_meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    (proceeding_dir / "meta.json").write_text(
+        json.dumps(proceeding_meta, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     (proceeding_dir / "proceeding.md").write_text(text, encoding="utf-8")
     (proceeding_dir / "split_candidates.json").write_text(
         json.dumps(split_candidates, ensure_ascii=False, indent=2),
