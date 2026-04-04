@@ -15,7 +15,7 @@ description: Use when adding or upgrading ScholarAIO support for a new scientifi
 
 规范参考：
 
-- tool skill 写法统一参照 [docs/internal/scientific-cli-skill-spec.md](/home/lzmo/repos/personal/scholaraio/docs/internal/scientific-cli-skill-spec.md)
+- 公开接入说明统一参照 [docs/guide/toolref-onboarding.md](../../../docs/guide/toolref-onboarding.md)
 - 运行时行为统一参照 `scientific-runtime` skill
 
 ## When to Use
