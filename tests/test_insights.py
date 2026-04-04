@@ -44,6 +44,34 @@ def test_aggregate_most_read_titles_deduplicates_title_variants(tmp_path: Path):
     assert most_read == [("Heat Transfer in Turbulent Flow", 3)]
 
 
+def test_aggregate_most_read_titles_resolves_all_names_before_top_k(tmp_path: Path):
+    papers_dir = tmp_path / "papers"
+    for name, title in [
+        ("variant-a", "Merged Title"),
+        ("variant-b", "Merged Title"),
+        ("variant-c", "Merged Title"),
+        ("single-a", "Single A"),
+        ("single-b", "Single B"),
+    ]:
+        paper_dir = papers_dir / name
+        paper_dir.mkdir(parents=True)
+        (paper_dir / "meta.json").write_text(json.dumps({"title": title}), encoding="utf-8")
+
+    events = [
+        {"name": "variant-a", "detail": ""},
+        {"name": "variant-b", "detail": ""},
+        {"name": "variant-c", "detail": ""},
+        {"name": "single-a", "detail": ""},
+        {"name": "single-a", "detail": ""},
+        {"name": "single-b", "detail": ""},
+        {"name": "single-b", "detail": ""},
+    ]
+
+    most_read = insights.aggregate_most_read_titles(events, papers_dir, top_k=2)
+
+    assert most_read == [("Merged Title", 3), ("Single A", 2)]
+
+
 def test_build_weekly_read_trend_groups_by_week():
     events = [
         {"timestamp": "2026-03-02T10:00:00+00:00"},

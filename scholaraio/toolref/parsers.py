@@ -42,6 +42,13 @@ def _parse_qe_def(filepath: Path) -> list[dict]:
         return textwrap.dedent(t).strip()
 
     def _parse_var_block(block: str, var_name: str) -> dict:
+        def _match_braced(field: str) -> str:
+            match = re.search(rf"{field}\s*\{{", block)
+            if not match:
+                return ""
+            value, _ = _extract_braced(block, match.end() - 1)
+            return _clean_text(value)
+
         vtype = ""
         tm = re.search(r"-type\s+(\S+)", block)
         if tm:
@@ -50,26 +57,18 @@ def _parse_qe_def(filepath: Path) -> list[dict]:
         sm = re.search(r"status\s*\{([^}]*)\}", block)
         if sm:
             status = sm.group(1).strip()
-        default_val = ""
-        dm = re.search(r"default\s*\{", block)
-        if dm:
-            default_val, _ = _extract_braced(block, dm.start() + len("default "))
-            default_val = _clean_text(default_val)
-        info_text = ""
-        im = re.search(r"info\s*\{", block)
-        if im:
-            info_text, _ = _extract_braced(block, im.start() + len("info "))
-            info_text = _clean_text(info_text)
+        default_val = _match_braced("default")
+        info_text = _match_braced("info")
         options_text = ""
         om = re.search(r"options\s*\{", block)
         if om:
-            options_text, _ = _extract_braced(block, om.start() + len("options "))
-            opts = re.findall(r"opt\s+-val\s+'([^']+)'", options_text)
+            raw_options_text, _ = _extract_braced(block, om.end() - 1)
+            opts = re.findall(r"opt\s+-val\s+'([^']+)'", raw_options_text)
+            option_info = re.findall(r"info\s*\{([^}]*)\}", raw_options_text)
             if opts:
                 options_text = "Options: " + ", ".join(opts)
-                oi = re.findall(r"info\s*\{([^}]*)\}", options_text)
-                if oi:
-                    options_text += "\n" + _clean_text(" ".join(oi))
+                if option_info:
+                    options_text += "\n" + _clean_text(" ".join(option_info))
         parts = []
         if vtype:
             parts.append(f"Type: {vtype}")

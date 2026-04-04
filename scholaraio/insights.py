@@ -84,7 +84,7 @@ def aggregate_most_read_titles(read_events: list[dict], papers_dir: Path, *, top
                 name_to_detail_title[name] = title
 
     pid_to_title: dict[str, str] = dict(name_to_detail_title)
-    for name, _ in name_counts.most_common(top_k):
+    for name in name_counts:
         if pid_to_title.get(name):
             continue
         meta_path = papers_dir / name / "meta.json"

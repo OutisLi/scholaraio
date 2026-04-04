@@ -21,6 +21,7 @@ from scholaraio.toolref import (
     _normalize_search_query,
     _parse_lammps_rst,
     _parse_manifest_html,
+    _parse_qe_def,
     _pick_manifest_synopsis,
     toolref_fetch,
     toolref_list,
@@ -1061,6 +1062,7 @@ def test_toolref_fetch_manifest_uses_fallback_urls(tmp_path, monkeypatch, toolre
         def __init__(self):
             self.headers = {}
             self.calls = []
+            self.trust_env = True
 
         def get(self, url, timeout=60):
             self.calls.append(url)
@@ -1091,7 +1093,40 @@ def test_toolref_fetch_manifest_uses_fallback_urls(tmp_path, monkeypatch, toolre
     count = toolref_fetch("bioinformatics", version="2026-03-curated", force=True, cfg=None)
 
     assert count == 1
+    assert session.trust_env is False
     assert session.calls == ["https://example.org/primary", "https://example.org/fallback"]
+
+
+def test_parse_qe_def_handles_compact_braces_and_option_info(tmp_path):
+    def_file = tmp_path / "INPUT_PW.def"
+    def_file.write_text(
+        """
+-program pw.x
+
+namelist SYSTEM {
+  var occupations {
+    default{'smearing'}
+    info{Occupation control}
+    options{
+      opt -val 'fixed' info{Keep occupations fixed}
+      opt -val 'smearing' info{Use electronic smearing}
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    rows = _parse_qe_def(def_file)
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["page_name"] == "pw.x/SYSTEM/occupations"
+    assert row["default_val"] == "'smearing'"
+    assert "Occupation control" in row["content"]
+    assert "Options: fixed, smearing" in row["content"]
+    assert "Keep occupations fixed" in row["content"]
+    assert "Use electronic smearing" in row["content"]
 
 
 def test_toolref_show_falls_back_to_program_manual_page(tmp_path, monkeypatch, toolref_mod):

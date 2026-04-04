@@ -1145,6 +1145,13 @@ def _parse_qe_def(filepath: Path) -> list[dict]:
 
     def _parse_var_block(block: str, var_name: str) -> dict:
         """Parse a var {...} block, extracting type, default, info, options."""
+        def _match_braced(field: str) -> str:
+            match = re.search(rf"{field}\s*\{{", block)
+            if not match:
+                return ""
+            value, _ = _extract_braced(block, match.end() - 1)
+            return _clean_text(value)
+
         # type
         vtype = ""
         tm = re.search(r"-type\s+(\S+)", block)
@@ -1158,32 +1165,24 @@ def _parse_qe_def(filepath: Path) -> list[dict]:
             status = sm.group(1).strip()
 
         # default
-        default_val = ""
-        dm = re.search(r"default\s*\{", block)
-        if dm:
-            default_val, _ = _extract_braced(block, dm.start() + len("default "))
-            default_val = _clean_text(default_val)
+        default_val = _match_braced("default")
 
         # info
-        info_text = ""
-        im = re.search(r"info\s*\{", block)
-        if im:
-            info_text, _ = _extract_braced(block, im.start() + len("info "))
-            info_text = _clean_text(info_text)
+        info_text = _match_braced("info")
 
         # options
         options_text = ""
         om = re.search(r"options\s*\{", block)
         if om:
-            options_text, _ = _extract_braced(block, om.start() + len("options "))
+            raw_options_text, _ = _extract_braced(block, om.end() - 1)
             # extract opt -val entries
-            opts = re.findall(r"opt\s+-val\s+'([^']+)'", options_text)
+            opts = re.findall(r"opt\s+-val\s+'([^']+)'", raw_options_text)
+            option_info = re.findall(r"info\s*\{([^}]*)\}", raw_options_text)
             if opts:
                 options_text = "Options: " + ", ".join(opts)
                 # also extract any info inside options
-                oi = re.findall(r"info\s*\{([^}]*)\}", options_text)
-                if oi:
-                    options_text += "\n" + _clean_text(" ".join(oi))
+                if option_info:
+                    options_text += "\n" + _clean_text(" ".join(option_info))
 
         # build synopsis
         parts = []
@@ -1819,6 +1818,7 @@ def toolref_fetch(
         vdir = _version_dir(tool, version, cfg)
         existing_pages = _manifest_page_count(vdir) if vdir.exists() else 0
         session = requests.Session()
+        session.trust_env = False
         session.headers.update({"User-Agent": "ScholarAIO/1.3 toolref-fetch"})
         manifest = _build_manifest(tool, version)
         prefetched_manifest_pages: dict[str, str] = {}

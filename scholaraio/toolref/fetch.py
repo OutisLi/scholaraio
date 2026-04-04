@@ -110,6 +110,7 @@ def _fetch_manifest_docs(tool: str, info: dict, version: str, force: bool, cfg: 
     vdir = _version_dir(tool, version, cfg)
     existing_pages = manifest_mod._manifest_page_count(vdir) if vdir.exists() else 0
     session = requests.Session()
+    session.trust_env = False
     session.headers.update({"User-Agent": "ScholarAIO/1.3 toolref-fetch"})
     manifest = manifest_mod._build_manifest(tool, version)
     prefetched_manifest_pages: dict[str, str] = {}
