@@ -213,6 +213,35 @@ class TestArxivCommands:
         assert any("arXiv 下载失败" in m for m in messages)
 
 
+class TestImportEndnoteOptionalDeps:
+    def test_import_endnote_reports_missing_optional_dependency(self, tmp_path, monkeypatch):
+        src = tmp_path / "library.xml"
+        src.write_text("<xml />", encoding="utf-8")
+
+        errors: list[str] = []
+
+        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            "scholaraio.sources.endnote._load_endnote_core",
+            lambda: (_ for _ in ()).throw(
+                ModuleNotFoundError("No module named 'endnote_utils'", name="endnote_utils")
+            ),
+        )
+
+        cfg = SimpleNamespace()
+        args = Namespace(files=[str(src)], no_api=False, dry_run=True, no_convert=False)
+
+        try:
+            cli.cmd_import_endnote(args, cfg)
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected SystemExit")
+
+        assert any("缺少依赖: endnote_utils" in msg for msg in errors)
+        assert any("pip install scholaraio[import]" in msg for msg in errors)
+
+
 class TestAttachPdfFallback:
     def test_attach_pdf_falls_back_without_cloud_key(self, tmp_path, monkeypatch):
         paper_dir = tmp_path / "papers" / "Smith-2023-Test"

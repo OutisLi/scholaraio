@@ -2420,7 +2420,11 @@ def cmd_import_endnote(args: argparse.Namespace, cfg) -> None:
             ui(f"错误：文件不存在: {p}")
             sys.exit(1)
 
-    records, pdf_paths = parse_endnote_full(paths)
+    try:
+        records, pdf_paths = parse_endnote_full(paths)
+    except ImportError as e:
+        _check_import_error(e)
+
     if not records:
         ui("未解析到任何记录")
         return
