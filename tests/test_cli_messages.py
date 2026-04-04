@@ -28,6 +28,28 @@ class TestSetupImportHints:
         assert "scholaraio import-zotero --local /path/to/zotero.sqlite\n" in zh_hint
 
 
+class TestCliHelpLocalization:
+    def test_setup_help_is_fully_localized(self):
+        parser = cli._build_parser()
+        setup_parser = parser._subparsers._group_actions[0].choices["setup"]
+        setup_help = setup_parser.format_help()
+        setup_check = setup_parser._subparsers._group_actions[0].choices["check"].format_help()
+
+        assert "默认进入交互式安装向导" in setup_help
+        assert "检查环境状态" in setup_help
+        assert "输出语言（zh 或 en，默认 zh）" in setup_check
+        assert "Start the interactive setup wizard" not in setup_help
+        assert "Check environment status" not in setup_help
+        assert "Output language" not in setup_check
+
+    def test_migrate_execute_help_uses_chinese_preview_wording(self):
+        parser = cli._build_parser()
+        migrate_help = parser._subparsers._group_actions[0].choices["migrate-dirs"].format_help()
+
+        assert "实际执行迁移（默认先预览）" in migrate_help
+        assert "dry-run" not in migrate_help
+
+
 class TestShowLayer4Headings:
     def test_translated_full_text_heading_uses_consistent_spacing(self, tmp_papers, monkeypatch):
         paper_dir = tmp_papers / "Smith-2023-Turbulence"
@@ -240,6 +262,40 @@ class TestImportEndnoteOptionalDeps:
 
         assert any("缺少依赖: endnote_utils" in msg for msg in errors)
         assert any("pip install scholaraio[import]" in msg for msg in errors)
+
+
+class TestMigrateDirsMessages:
+    def test_migrate_dirs_preview_message_is_chinese(self, tmp_path, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.migrate.migrate_to_dirs",
+            lambda papers_dir, dry_run: {"migrated": 2, "skipped": 1, "failed": 0},
+        )
+
+        cfg = SimpleNamespace(papers_dir=tmp_path / "papers")
+        args = Namespace(execute=False)
+
+        cli.cmd_migrate_dirs(args, cfg)
+
+        assert any("迁移完成（预览）" in msg for msg in messages)
+        assert not any("dry-run" in msg or "executed" in msg for msg in messages)
+
+    def test_migrate_dirs_execute_message_is_chinese(self, tmp_path, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.migrate.migrate_to_dirs",
+            lambda papers_dir, dry_run: {"migrated": 1, "skipped": 0, "failed": 0},
+        )
+
+        cfg = SimpleNamespace(papers_dir=tmp_path / "papers")
+        args = Namespace(execute=True)
+
+        cli.cmd_migrate_dirs(args, cfg)
+
+        assert any("迁移完成（已执行）" in msg for msg in messages)
+        assert not any("dry-run" in msg or "executed" in msg for msg in messages)
 
 
 class TestAttachPdfFallback:

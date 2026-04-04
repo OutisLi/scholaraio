@@ -2398,8 +2398,8 @@ def cmd_migrate_dirs(args: argparse.Namespace, cfg) -> None:
 
     dry_run = not args.execute
     stats = migrate_to_dirs(cfg.papers_dir, dry_run=dry_run)
-    mode = "dry-run" if dry_run else "executed"
-    ui(f"\n迁移完成 ({mode}): {stats['migrated']} 迁移 | {stats['skipped']} 跳过 | {stats['failed']} 失败")
+    mode = "预览" if dry_run else "已执行"
+    ui(f"\n迁移完成（{mode}）：{stats['migrated']} 迁移 | {stats['skipped']} 跳过 | {stats['failed']} 失败")
     if dry_run and stats["migrated"]:
         ui("添加 --execute 以实际执行迁移")
     if not dry_run and stats["migrated"]:
@@ -2944,7 +2944,7 @@ def cmd_citation_check(args: argparse.Namespace, cfg) -> None:
 # ============================================================================
 
 
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scholaraio",
         description="本地学术文献检索工具",
@@ -3287,21 +3287,18 @@ def main() -> None:
     # --- setup ---
     p_setup = sub.add_parser(
         "setup",
-        help="环境检测与安装向导 / Setup wizard",
-        description="默认进入交互式安装向导；使用 `check` 子命令仅做环境诊断。\n"
-        "Start the interactive setup wizard by default; use `check` for diagnostics only.",
+        help="环境检测与安装向导",
+        description="默认进入交互式安装向导；使用 `check` 子命令仅做环境诊断。",
     )
     p_setup.set_defaults(func=cmd_setup)
     p_setup_sub = p_setup.add_subparsers(dest="setup_action")
-    p_setup_check = p_setup_sub.add_parser("check", help="检查环境状态 / Check environment status")
-    p_setup_check.add_argument(
-        "--lang", choices=["en", "zh"], default="zh", help="输出语言 / Output language (default: zh)"
-    )
+    p_setup_check = p_setup_sub.add_parser("check", help="检查环境状态")
+    p_setup_check.add_argument("--lang", choices=["en", "zh"], default="zh", help="输出语言（zh 或 en，默认 zh）")
 
     # --- migrate-dirs ---
     p_migrate = sub.add_parser("migrate-dirs", help="迁移 data/papers/ 从平铺结构到每篇一目录")
     p_migrate.set_defaults(func=cmd_migrate_dirs)
-    p_migrate.add_argument("--execute", action="store_true", help="实际执行迁移（默认 dry-run）")
+    p_migrate.add_argument("--execute", action="store_true", help="实际执行迁移（默认先预览）")
 
     # --- fsearch ---
     p_fsearch = sub.add_parser("fsearch", help="联邦搜索：同时搜索主库、explore 库和 arXiv")
@@ -3417,6 +3414,12 @@ def main() -> None:
     p_trans.add_argument("--all", action="store_true", help="批量翻译所有论文")
     p_trans.add_argument("--lang", type=str, default=None, help="目标语言（默认读 config translate.target_lang）")
     p_trans.add_argument("--force", action="store_true", help="强制重新翻译（覆盖已有翻译）")
+
+    return parser
+
+
+def main() -> None:
+    parser = _build_parser()
 
     args = parser.parse_args()
     cfg = load_config()
