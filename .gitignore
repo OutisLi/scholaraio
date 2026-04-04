@@ -38,3 +38,5 @@ docs/internal/
 
 # Backups
 *.bak
+
+*.codex

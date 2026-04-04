@@ -104,6 +104,8 @@ VALID_BACKENDS = [
     "hybrid-auto-engine",
     "hybrid-http-client",
 ]
+VALID_CLOUD_MODEL_VERSIONS = ["pipeline", "vlm", "MinerU-HTML"]
+PDF_CLOUD_MODEL_VERSIONS = {"pipeline", "vlm"}
 
 DEFAULT_BACKEND = "pipeline"
 DEFAULT_LANG = "ch"
@@ -146,6 +148,8 @@ class ConvertOptions:
         api_url: MinerU 服务地址。
         output_dir: 输出目录，为 ``None`` 时与 PDF 同目录。
         backend: MinerU 解析后端（``pipeline`` | ``vlm-auto-engine`` 等）。
+        cloud_model_version: MinerU 云 API ``model_version``（``pipeline`` | ``vlm`` | ``MinerU-HTML``）。
+            留空时根据 ``backend`` 做兼容映射。
         lang: OCR 语言（``ch`` | ``en`` | ``latin`` 等）。
         parse_method: 解析方式（``auto`` | ``txt`` | ``ocr``）。
         formula_enable: 是否启用公式解析。
@@ -160,6 +164,7 @@ class ConvertOptions:
     api_url: str = DEFAULT_API_URL
     output_dir: Path | None = None
     backend: str = DEFAULT_BACKEND
+    cloud_model_version: str = ""
     lang: str = DEFAULT_LANG
     parse_method: str = "auto"
     formula_enable: bool = True
@@ -410,15 +415,9 @@ def convert_pdf_cloud(
 
     # Step 1: request signed upload URL
     data_id = pdf_path.stem
-    payload: dict = {
-        "files": [{"name": pdf_path.name, "data_id": data_id}],
-        "model_version": opts.backend,
-        "enable_formula": opts.formula_enable,
-        "enable_table": opts.table_enable,
-        "language": opts.lang,
-    }
-    if opts.parse_method == "ocr":
-        payload["is_ocr"] = True
+    model_version = _resolve_cloud_model_version(opts)
+    file_entry = _build_cloud_file_entry(pdf_path.name, data_id, opts, model_version=model_version)
+    payload = _build_cloud_payload([file_entry], opts)
 
     try:
         resp = requests.post(
@@ -619,7 +618,8 @@ def _convert_chunk_cloud(
 
         results[data_id] = result
         data_id_to_path[data_id] = pdf_path
-        files_payload.append({"name": pdf_path.name, "data_id": data_id})
+        model_version = _resolve_cloud_model_version(opts)
+        files_payload.append(_build_cloud_file_entry(pdf_path.name, data_id, opts, model_version=model_version))
 
     if not files_payload:
         return list(results.values())
@@ -629,15 +629,7 @@ def _convert_chunk_cloud(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    payload: dict = {
-        "files": files_payload,
-        "model_version": opts.backend,
-        "enable_formula": opts.formula_enable,
-        "enable_table": opts.table_enable,
-        "language": opts.lang,
-    }
-    if opts.parse_method == "ocr":
-        payload["is_ocr"] = True
+    payload = _build_cloud_payload(files_payload, opts)
 
     try:
         resp = requests.post(
@@ -1069,6 +1061,50 @@ def _merge_chunk_results(
     return merged
 
 
+def _resolve_cloud_model_version(opts: ConvertOptions) -> str:
+    """Resolve cloud ``model_version`` from options with backward compatibility."""
+    model_version = (opts.cloud_model_version or "").strip()
+    if model_version in VALID_CLOUD_MODEL_VERSIONS:
+        return model_version
+
+    # Backward-compatible fallback from local-style backend names.
+    if opts.backend in {"vlm-auto-engine", "vlm-http-client", "vlm"}:
+        return "vlm"
+    if opts.backend in {"pipeline", "hybrid-auto-engine", "hybrid-http-client"}:
+        return "pipeline"
+
+    _log.warning("unknown cloud model_version/backend '%s', fallback to pipeline", model_version or opts.backend)
+    return "pipeline"
+
+
+def _build_cloud_file_entry(
+    file_name: str, data_id: str, opts: ConvertOptions, *, model_version: str
+) -> dict[str, object]:
+    """Build a MinerU cloud file entry following official Precision API semantics."""
+    entry: dict[str, object] = {"name": file_name, "data_id": data_id}
+    if model_version in PDF_CLOUD_MODEL_VERSIONS and opts.parse_method == "ocr":
+        entry["is_ocr"] = True
+    return entry
+
+
+def _build_cloud_payload(files_payload: list[dict[str, object]], opts: ConvertOptions) -> dict[str, object]:
+    """Build a MinerU cloud payload with only officially documented fields."""
+    model_version = _resolve_cloud_model_version(opts)
+    payload: dict[str, object] = {
+        "files": files_payload,
+        "model_version": model_version,
+    }
+    if model_version in PDF_CLOUD_MODEL_VERSIONS:
+        payload["enable_formula"] = opts.formula_enable
+        payload["enable_table"] = opts.table_enable
+        payload["language"] = opts.lang
+        if opts.parse_method == "txt":
+            _log.warning("MinerU cloud API has no txt-only flag; parse_method=txt is treated as default non-OCR")
+    elif opts.parse_method in {"ocr", "txt"}:
+        _log.warning("MinerU cloud model_version=%s ignores parse_method=%s", model_version, opts.parse_method)
+    return payload
+
+
 def _convert_long_pdf(pdf_path: Path, opts: ConvertOptions, chunk_size: int = DEFAULT_CHUNK_PAGES) -> ConvertResult:
     """Handle a long PDF: split → convert each chunk → merge results.
 
@@ -1123,6 +1159,7 @@ def _convert_long_pdf_cloud(
     chunk_opts = ConvertOptions(
         output_dir=chunks_dir,
         backend=opts.backend,
+        cloud_model_version=opts.cloud_model_version,
         lang=opts.lang,
         parse_method=opts.parse_method,
         formula_enable=opts.formula_enable,

@@ -184,6 +184,11 @@ def step_mineru(ctx: InboxCtx) -> StepResult:
         check_server,
         convert_pdf,
     )
+    from scholaraio.ingest.pdf_fallback import (
+        convert_pdf_with_fallback,
+        preferred_parser_order,
+        prefers_fallback_parser,
+    )
 
     # md-only entry (no PDF): skip MinerU entirely
     if ctx.pdf_path is None:
@@ -210,27 +215,71 @@ def step_mineru(ctx: InboxCtx) -> StepResult:
     mineru_opts = ConvertOptions(
         api_url=ctx.cfg.ingest.mineru_endpoint,
         output_dir=ctx.inbox_dir,
+        backend=ctx.cfg.ingest.mineru_backend_local,
+        cloud_model_version=ctx.cfg.ingest.mineru_model_version_cloud,
+        lang=ctx.cfg.ingest.mineru_lang,
+        parse_method=ctx.cfg.ingest.mineru_parse_method,
+        formula_enable=ctx.cfg.ingest.mineru_enable_formula,
+        table_enable=ctx.cfg.ingest.mineru_enable_table,
     )
+
+    result = None
+    fallback_auto_detect = getattr(ctx.cfg.ingest, "pdf_fallback_auto_detect", True)
+    fallback_order = preferred_parser_order(
+        getattr(ctx.cfg.ingest, "pdf_preferred_parser", "mineru"),
+        getattr(ctx.cfg.ingest, "pdf_fallback_order", None),
+        auto_detect=fallback_auto_detect,
+    )
+
+    if prefers_fallback_parser(getattr(ctx.cfg.ingest, "pdf_preferred_parser", "mineru")):
+        ok, parser_name, err = convert_pdf_with_fallback(
+            pdf_path,
+            md_path,
+            parser_order=fallback_order,
+            auto_detect=fallback_auto_detect,
+        )
+        if not ok:
+            _log.error("preferred parser chain failed: %s", err)
+            ctx.status = "failed"
+            return StepResult.FAIL
+        ui(f"已按配置优先使用 {parser_name} 解析。")
+        ctx.md_path = md_path
+        return StepResult.OK
+
+    local_mineru_available = check_server(ctx.cfg.ingest.mineru_endpoint)
+    cloud_api_key = ""
+    if not local_mineru_available:
+        cloud_api_key = ctx.cfg.resolved_mineru_api_key()
+        if not cloud_api_key:
+            _log.warning("MinerU unreachable and no cloud API key, trying fallback parsers")
+            ok, parser_name, fallback_err = convert_pdf_with_fallback(
+                pdf_path,
+                md_path,
+                parser_order=fallback_order,
+                auto_detect=fallback_auto_detect,
+            )
+            if not ok:
+                _log.error("fallback parsers failed: %s", fallback_err)
+                ctx.status = "failed"
+                return StepResult.FAIL
+            ui(f"MinerU 不可用，已降级使用 {parser_name} 解析。")
+            ctx.md_path = md_path
+            return StepResult.OK
 
     chunk_limit = getattr(ctx.cfg.ingest, "chunk_page_limit", 100)
     page_count = _get_pdf_page_count(pdf_path)
     is_long = page_count > chunk_limit
 
     if is_long:
-        ui(f"Long PDF detected ({page_count} pages > {chunk_limit} limit), splitting...")
+        ui(f"检测到长 PDF（{page_count} 页，超过 {chunk_limit} 页限制），正在分片处理...")
 
     # Try local MinerU first, fallback to cloud API
-    if check_server(ctx.cfg.ingest.mineru_endpoint):
+    if local_mineru_available:
         if is_long:
             result = _convert_long_pdf(pdf_path, mineru_opts, chunk_size=chunk_limit)
         else:
             result = convert_pdf(pdf_path, mineru_opts)
     else:
-        api_key = ctx.cfg.resolved_mineru_api_key()
-        if not api_key:
-            _log.error("MinerU unreachable and no cloud API key")
-            ctx.status = "failed"
-            return StepResult.FAIL
         from scholaraio.ingest.mineru import convert_pdf_cloud
 
         _log.debug("local MinerU unreachable, using cloud API")
@@ -238,7 +287,7 @@ def step_mineru(ctx: InboxCtx) -> StepResult:
             result = _convert_long_pdf_cloud(
                 pdf_path,
                 mineru_opts,
-                api_key=api_key,
+                api_key=cloud_api_key,
                 cloud_url=ctx.cfg.ingest.mineru_cloud_url,
                 chunk_size=chunk_limit,
             )
@@ -246,14 +295,26 @@ def step_mineru(ctx: InboxCtx) -> StepResult:
             result = convert_pdf_cloud(
                 pdf_path,
                 mineru_opts,
-                api_key=api_key,
+                api_key=cloud_api_key,
                 cloud_url=ctx.cfg.ingest.mineru_cloud_url,
             )
 
-    if not result.success:
-        _log.error("MinerU failed: %s", result.error)
-        ctx.status = "failed"
-        return StepResult.FAIL
+    if result is None or not result.success:
+        mineru_err = result.error if result is not None else "MinerU unavailable"
+        _log.warning("MinerU failed, trying fallback parsers: %s", mineru_err)
+        ok, parser_name, fallback_err = convert_pdf_with_fallback(
+            pdf_path,
+            md_path,
+            parser_order=fallback_order,
+            auto_detect=fallback_auto_detect,
+        )
+        if not ok:
+            _log.error("fallback parsers failed: %s", fallback_err)
+            ctx.status = "failed"
+            return StepResult.FAIL
+        ui(f"MinerU 不可用，已降级使用 {parser_name} 解析。")
+        ctx.md_path = md_path
+        return StepResult.OK
 
     ctx.md_path = result.md_path or md_path
     return StepResult.OK
@@ -954,7 +1015,15 @@ def _process_inbox(
         if pdfs_to_convert:
             from scholaraio.ingest.mineru import ConvertOptions, convert_pdfs_cloud_batch
 
-            mineru_opts = ConvertOptions(output_dir=inbox_dir)
+            mineru_opts = ConvertOptions(
+                output_dir=inbox_dir,
+                backend=cfg.ingest.mineru_backend_local,
+                cloud_model_version=cfg.ingest.mineru_model_version_cloud,
+                lang=cfg.ingest.mineru_lang,
+                parse_method=cfg.ingest.mineru_parse_method,
+                formula_enable=cfg.ingest.mineru_enable_formula,
+                table_enable=cfg.ingest.mineru_enable_table,
+            )
             t_batch_start = time.time()
             batch_results = convert_pdfs_cloud_batch(
                 pdfs_to_convert,
@@ -1457,20 +1526,53 @@ def batch_convert_pdfs(
         return stats
 
     from scholaraio.ingest.mineru import ConvertOptions, check_server
+    from scholaraio.ingest.pdf_fallback import (
+        convert_pdf_with_fallback,
+        preferred_parser_order,
+        prefers_fallback_parser,
+    )
 
     use_local = check_server(cfg.ingest.mineru_endpoint)
     api_key = None
+    fallback_auto_detect = getattr(cfg.ingest, "pdf_fallback_auto_detect", True)
+    fallback_order = preferred_parser_order(
+        getattr(cfg.ingest, "pdf_preferred_parser", "mineru"),
+        getattr(cfg.ingest, "pdf_fallback_order", None),
+        auto_detect=fallback_auto_detect,
+    )
+    prefer_fallback = prefers_fallback_parser(getattr(cfg.ingest, "pdf_preferred_parser", "mineru"))
     if not use_local:
         api_key = cfg.resolved_mineru_api_key()
         if not api_key:
-            ui("错误：MinerU 不可达且无云 API key，无法批量转换")
-            return stats
+            ui("MinerU 不可达且无云 API key，改用 fallback 解析器继续批量转换")
 
     ui(f"\n开始批量转换 {len(to_convert)} 个 PDF...")
 
     converted_dirs: list[Path] = []
 
-    if use_local:
+    def _run_fallback(pdir: Path, pdf_path: Path) -> bool:
+        ok, parser_name, err = convert_pdf_with_fallback(
+            pdf_path,
+            pdir / "paper.md",
+            parser_order=fallback_order,
+            auto_detect=fallback_auto_detect,
+        )
+        if not ok:
+            ui(f"  {pdir.name}: fallback 失败: {err}")
+            stats["failed"] += 1
+            return False
+        if pdf_path.exists() and pdf_path.name != "paper.pdf":
+            pdf_path.unlink()
+        ui(f"  {pdir.name}: 已降级使用 {parser_name}")
+        converted_dirs.append(pdir)
+        stats["converted"] += 1
+        return True
+
+    if prefer_fallback:
+        for idx, (pdir, pdf_path) in enumerate(to_convert):
+            ui(f"[{idx + 1}/{len(to_convert)}] {pdir.name}")
+            _run_fallback(pdir, pdf_path)
+    elif use_local:
         # Local MinerU: sequential single-file conversion
         from scholaraio.ingest.mineru import convert_pdf
 
@@ -1479,16 +1581,26 @@ def batch_convert_pdfs(
             mineru_opts = ConvertOptions(
                 api_url=cfg.ingest.mineru_endpoint,
                 output_dir=pdir,
+                backend=cfg.ingest.mineru_backend_local,
+                cloud_model_version=cfg.ingest.mineru_model_version_cloud,
+                lang=cfg.ingest.mineru_lang,
+                parse_method=cfg.ingest.mineru_parse_method,
+                formula_enable=cfg.ingest.mineru_enable_formula,
+                table_enable=cfg.ingest.mineru_enable_table,
             )
             result = convert_pdf(pdf_path, mineru_opts)
             if not result.success:
-                ui(f"  转换失败: {result.error}")
-                stats["failed"] += 1
+                ui(f"  MinerU 失败: {result.error}")
+                _run_fallback(pdir, pdf_path)
                 continue
 
             _postprocess_convert(pdir, pdf_path, result)
             converted_dirs.append(pdir)
             stats["converted"] += 1
+    elif not api_key:
+        for idx, (pdir, pdf_path) in enumerate(to_convert):
+            ui(f"[{idx + 1}/{len(to_convert)}] {pdir.name}")
+            _run_fallback(pdir, pdf_path)
     else:
         # Cloud MinerU: true batch conversion via convert_pdfs_cloud_batch
         import tempfile
@@ -1510,7 +1622,15 @@ def batch_convert_pdfs(
 
         with tempfile.TemporaryDirectory(prefix="scholaraio_batch_") as tmp:
             tmp_dir = Path(tmp)
-            batch_opts = ConvertOptions(output_dir=tmp_dir)
+            batch_opts = ConvertOptions(
+                output_dir=tmp_dir,
+                backend=cfg.ingest.mineru_backend_local,
+                cloud_model_version=cfg.ingest.mineru_model_version_cloud,
+                lang=cfg.ingest.mineru_lang,
+                parse_method=cfg.ingest.mineru_parse_method,
+                formula_enable=cfg.ingest.mineru_enable_formula,
+                table_enable=cfg.ingest.mineru_enable_table,
+            )
 
             batch_results = convert_pdfs_cloud_batch(
                 pdf_paths,
@@ -1529,8 +1649,8 @@ def batch_convert_pdfs(
                     continue
 
                 if not br.success:
-                    ui(f"  {pdir.name}: 转换失败: {br.error}")
-                    stats["failed"] += 1
+                    ui(f"  {pdir.name}: MinerU 失败: {br.error}")
+                    _run_fallback(pdir, br.pdf_path)
                     continue
 
                 # Move .md to paper_dir/paper.md

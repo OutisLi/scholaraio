@@ -49,7 +49,7 @@ from ._extract import (  # noqa: F401
     _split_authors,
     extract_metadata_from_markdown,
 )
-from ._models import PaperMetadata  # noqa: F401
+from ._models import PaperMetadata, configure_s2_session  # noqa: F401
 from ._writer import (  # noqa: F401
     _clean_title_for_filename,
     _sanitize_for_filename,
