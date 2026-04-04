@@ -11,6 +11,10 @@ def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def proceedings_db_path(root: Path) -> Path:
+    return root / "data" / "proceedings" / "proceedings.db"
+
+
 def iter_proceedings_dirs(proceedings_root: Path) -> Iterator[Path]:
     if not proceedings_root.exists():
         return

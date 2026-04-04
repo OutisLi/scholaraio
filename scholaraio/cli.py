@@ -2049,8 +2049,31 @@ def cmd_fsearch(args: argparse.Namespace, cfg) -> None:
                     ui(f"       {first} | arxiv:{arxiv_id}" + (f" | doi:{doi}" if doi else ""))
                     ui()
 
+        elif scope == "proceedings":
+            ui("── [proceedings] ──")
+            from scholaraio.index import search_proceedings
+            from scholaraio.proceedings import proceedings_db_path
+
+            db = proceedings_db_path(cfg._root)
+            if not db.exists():
+                ui("  proceedings 索引不存在，请先导入论文集")
+                results = []
+            else:
+                try:
+                    results = search_proceedings(query, db, top_k=top_k)
+                except Exception as e:
+                    ui(f"  proceedings 搜索失败：{e}")
+                    results = []
+            if not results:
+                ui("  无结果")
+            else:
+                for i, r in enumerate(results, 1):
+                    extra = f"proceedings:{r.get('proceeding_title', r.get('proceeding_dir', '?'))}"
+                    _print_search_result(i, r, extra=extra)
+            ui()
+
         else:
-            ui(f"  未知 scope: {scope}，支持: main / explore:NAME / explore:* / arxiv")
+            ui(f"  未知 scope: {scope}，支持: main / proceedings / explore:NAME / explore:* / arxiv")
 
 
 # ============================================================================
@@ -3218,14 +3241,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_migrate.add_argument("--execute", action="store_true", help="实际执行迁移（默认先预览）")
 
     # --- fsearch ---
-    p_fsearch = sub.add_parser("fsearch", help="联邦搜索：同时搜索主库、explore 库和 arXiv")
+    p_fsearch = sub.add_parser("fsearch", help="联邦搜索：同时搜索主库、proceedings、explore 库和 arXiv")
     p_fsearch.set_defaults(func=cmd_fsearch)
     p_fsearch.add_argument("query", nargs="+", help="检索词")
     p_fsearch.add_argument(
         "--scope",
         type=str,
         default="main",
-        help="搜索范围（逗号分隔）：main / explore:NAME / explore:* / arxiv（默认 main）",
+        help="搜索范围（逗号分隔）：main / proceedings / explore:NAME / explore:* / arxiv（默认 main）",
     )
     p_fsearch.add_argument("--top", type=int, default=None, help="每个来源最多返回 N 条（默认 10）")
 

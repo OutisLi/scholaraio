@@ -12,6 +12,7 @@ from scholaraio.ingest.pipeline import run_pipeline
 from scholaraio.index import build_proceedings_index, search_proceedings
 from scholaraio.proceedings import iter_proceedings_papers
 from scholaraio.config import _build_config
+from scholaraio import cli
 
 
 def _write_proceedings_fixture(root: Path) -> Path:
@@ -225,3 +226,39 @@ def test_pipeline_keeps_regular_paper_in_main_library(tmp_path: Path):
 
     assert any((tmp_path / "data" / "papers").iterdir())
     assert not any((tmp_path / "data" / "proceedings").iterdir())
+
+
+def test_fsearch_proceedings_scope_returns_proceedings_results(tmp_path: Path, monkeypatch):
+    cfg = _build_config({"ingest": {"extractor": "regex"}}, tmp_path)
+    cfg.ensure_dirs()
+    md_path = tmp_path / "data" / "inbox-proceedings" / "volume.md"
+    md_path.write_text(
+        "# Proceedings of the IUTAM Symposium on Granular Flow\n\n"
+        "## Paper: Wave propagation in porous media\nAlice Zheng\n10.1000/example.1\nGranular damping in porous waves.\n",
+        encoding="utf-8",
+    )
+    run_pipeline(["extract", "dedup", "ingest"], cfg, {"no_api": True})
+
+    messages: list[str] = []
+    monkeypatch.setattr(cli, "ui", lambda message="": messages.append(message))
+
+    cli.cmd_fsearch(type("Args", (), {"query": ["granular"], "scope": "proceedings", "top": 10})(), cfg)
+
+    joined = "\n".join(messages)
+    assert "── [proceedings] ──" in joined
+    assert "proceedings:" in joined
+    assert "Wave propagation in porous media" in joined
+
+
+def test_fsearch_main_scope_excludes_proceedings_results(tmp_path: Path, monkeypatch):
+    cfg = _build_config({"ingest": {"extractor": "regex"}}, tmp_path)
+    cfg.ensure_dirs()
+
+    messages: list[str] = []
+    monkeypatch.setattr(cli, "ui", lambda message="": messages.append(message))
+
+    cli.cmd_fsearch(type("Args", (), {"query": ["granular"], "scope": "main", "top": 10})(), cfg)
+
+    joined = "\n".join(messages)
+    assert "── [主库] ──" in joined
+    assert "proceedings:" not in joined
