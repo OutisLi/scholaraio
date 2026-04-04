@@ -43,7 +43,7 @@ Skills are defined in the `.claude/skills/` directory and follow the [Agent Skil
 
 The right mental model is to treat skills as "reusable workflows": when the user's intent clearly matches a capability, read the corresponding `SKILL.md` first and follow the workflow already distilled there instead of inventing a process from scratch every time.
 
-**Current skills (26 total):**
+**Current skills:**
 
 Knowledge base management:
 - `search` - When the user wants to find papers, search authors, or run keyword / semantic / hybrid retrieval, start with this skill.
@@ -78,6 +78,15 @@ Visualization and document generation:
 System operations:
 - `setup` - When the user wants to install, configure, or diagnose the ScholarAIO environment, start with this skill.
 - `metrics` - When the user wants token usage, call timing, or runtime metrics, use this skill.
+
+Scientific computing:
+- `scientific-runtime` - When the user is serving scientific CLI tasks through ScholarAIO and should prefer `toolref`, safe fallbacks, and user-facing execution over maintenance work, use this skill.
+- `scientific-tool-onboarding` - When the user is adding or upgrading support for a scientific computing tool and needs docs ingestion, `toolref` integration, lightweight skill design, and end-to-end CLI verification, use this skill.
+- `quantum-espresso` - When the task involves Quantum ESPRESSO input variables, workflows, or first-principles simulation decisions, use this skill.
+- `lammps` - When the task involves LAMMPS potentials, commands, or classical materials simulations, use this skill.
+- `gromacs` - When the task involves GROMACS setup, equilibration, analysis, or biomolecular MD workflows, use this skill.
+- `openfoam` - When the task involves OpenFOAM solvers, dictionaries, mesh workflow, turbulence models, or CFD case setup, use this skill.
+- `bioinformatics` - When the task involves BLAST, minimap2, samtools, bcftools, MAFFT, IQ-TREE, ESMFold, or related bioinformatics toolchains, use this skill.
 
 **Workflow for adding a new skill:**
 
@@ -170,6 +179,7 @@ Workflow:
 | `cli.py` | Main CLI entry point |
 | `setup.py` | Environment detection + setup wizard |
 | `metrics.py` | LLM token usage + API timing |
+| `insights.py` | Research behavior analytics (hot keywords, read trends, semantic neighbor recommendations, workspace activity) |
 | `translate.py` | Paper translation (language detection + LLM chunked translation + batch translation) |
 | `migrate.py` | Data migration (flat structure -> per-directory structure) |
 
@@ -181,7 +191,7 @@ Besides skills, the current CLI also provides several important capabilities wor
 - Enrichment and repair: `enrich-toc`, `enrich-l3`, `backfill-abstract`, `refetch`, `repair`
 - Data maintenance: `attach-pdf`, `migrate-dirs`
 - Workspace: `ws` (subcommands such as `init`, `add`, `remove`, `show`, `search`, `export`, and more)
-- Citation and documents: `style`, `document`
+- External and scientific runtime: `arxiv`, `toolref`, `insights`, `style`, `document`
 
 ## Architecture
 

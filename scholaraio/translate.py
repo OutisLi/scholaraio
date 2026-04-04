@@ -16,8 +16,11 @@ translate.py — 论文 Markdown 自动翻译
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -319,6 +322,7 @@ SKIP_NO_MD = "no_paper_md"
 SKIP_ALREADY_EXISTS = "already_exists"
 SKIP_EMPTY = "empty_source"
 SKIP_SAME_LANG = "same_language"
+SKIP_ALL_CHUNKS_FAILED = "all_chunks_failed"
 
 
 def validate_lang(lang: str) -> str:
@@ -347,16 +351,47 @@ class TranslateResult:
         path: Path to the translated file, or ``None`` if skipped/failed.
         skip_reason: Why the translation was skipped (one of ``SKIP_*`` constants),
             or empty string if translated successfully.
-        partial: ``True`` when some chunks failed and the output is mixed-language.
+        partial: ``True`` when translation was interrupted after some chunks were
+            written, so the output is resumable but incomplete.
     """
 
     path: Path | None = None
     skip_reason: str = ""
     partial: bool = False
+    completed_chunks: int = 0
+    total_chunks: int = 0
 
     @property
     def ok(self) -> bool:
-        return self.path is not None
+        return self.path is not None and not self.partial
+
+
+def _translation_progress_path(paper_dir: Path, lang: str) -> Path:
+    return paper_dir / f".paper_{lang}.progress.json"
+
+
+def _source_digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _load_translation_progress(progress_path: Path) -> dict | None:
+    if not progress_path.exists():
+        return None
+    try:
+        payload = json.loads(progress_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _write_translation_progress(progress_path: Path, payload: dict) -> None:
+    tmp_path = progress_path.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(progress_path)
+
+
+def _write_translated_output(out_path: Path, translated_chunks: list[str]) -> None:
+    out_path.write_text("\n\n".join(translated_chunks), encoding="utf-8")
 
 
 def translate_paper(
@@ -365,6 +400,7 @@ def translate_paper(
     *,
     target_lang: str | None = None,
     force: bool = False,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> TranslateResult:
     """Translate a paper's markdown to the target language.
 
@@ -380,17 +416,19 @@ def translate_paper(
     Returns:
         :class:`TranslateResult` with ``path`` (or ``None``) and ``skip_reason``.
     """
+
+    def report(message: str) -> None:
+        if progress_callback is not None:
+            progress_callback(message)
+
     lang = validate_lang(target_lang or config.translate.target_lang)
     md_path = paper_dir / "paper.md"
     out_path = paper_dir / f"paper_{lang}.md"
+    progress_path = _translation_progress_path(paper_dir, lang)
 
     if not md_path.exists():
         _log.debug("no paper.md in %s, skipping", paper_dir.name)
         return TranslateResult(skip_reason=SKIP_NO_MD)
-
-    if out_path.exists() and not force:
-        _log.debug("translation already exists: %s", out_path.name)
-        return TranslateResult(skip_reason=SKIP_ALREADY_EXISTS)
 
     text = md_path.read_text(encoding="utf-8", errors="replace")
     if not text.strip():
@@ -405,37 +443,90 @@ def translate_paper(
     # Chunk and translate
     chunk_size = config.translate.chunk_size
     chunks = _split_into_chunks(text, chunk_size)
+    total_chunks = len(chunks)
+    source_digest = _source_digest(text)
     _log.debug("translating %s: %d chunks, target=%s", paper_dir.name, len(chunks), lang)
 
     translated_chunks: list[str] = []
-    failed_count = 0
-    for i, chunk in enumerate(chunks):
+    start_idx = 0
+
+    if force:
+        progress_path.unlink(missing_ok=True)
+        out_path.unlink(missing_ok=True)
+    else:
+        progress = _load_translation_progress(progress_path)
+        if progress:
+            translated_chunks = progress.get("translated_chunks", [])
+            start_idx = int(progress.get("next_chunk", 0) or 0)
+            is_valid_progress = (
+                progress.get("target_lang") == lang
+                and progress.get("source_digest") == source_digest
+                and progress.get("chunk_size") == chunk_size
+                and progress.get("total_chunks") == total_chunks
+                and isinstance(translated_chunks, list)
+                and start_idx == len(translated_chunks)
+                and 0 <= start_idx <= total_chunks
+            )
+            if is_valid_progress and start_idx < total_chunks:
+                report(f"继续翻译：已完成 {start_idx}/{total_chunks} 块")
+                _write_translated_output(out_path, translated_chunks)
+            elif is_valid_progress and start_idx == total_chunks and out_path.exists():
+                progress_path.unlink(missing_ok=True)
+                _record_translation_meta(paper_dir, lang, src_lang, config, partial=False)
+                report(f"翻译完成: {total_chunks}/{total_chunks} 块")
+                return TranslateResult(path=out_path, completed_chunks=total_chunks, total_chunks=total_chunks)
+            else:
+                translated_chunks = []
+                start_idx = 0
+                progress_path.unlink(missing_ok=True)
+                out_path.unlink(missing_ok=True)
+        elif out_path.exists():
+            _log.debug("translation already exists: %s", out_path.name)
+            return TranslateResult(skip_reason=SKIP_ALREADY_EXISTS)
+
+    if start_idx == 0:
+        report(f"开始翻译，共 {total_chunks} 块")
+
+    for i in range(start_idx, total_chunks):
+        chunk = chunks[i]
+        report(f"翻译进度: {i + 1}/{total_chunks}")
         try:
             translated = _translate_chunk(chunk, lang, config)
-            translated_chunks.append(translated)
             _log.debug("  chunk %d/%d done (%d chars)", i + 1, len(chunks), len(translated))
         except Exception as e:
             _log.error("  chunk %d/%d failed: %s", i + 1, len(chunks), e)
-            translated_chunks.append(chunk)  # keep original on failure
-            failed_count += 1
+            if translated_chunks:
+                report(f"翻译在第 {i + 1}/{total_chunks} 块中断，可稍后继续续翻")
+                return TranslateResult(
+                    path=out_path,
+                    partial=True,
+                    completed_chunks=len(translated_chunks),
+                    total_chunks=total_chunks,
+                )
+            _log.error("%s: all %d chunks failed; not writing output", paper_dir.name, len(chunks))
+            return TranslateResult(skip_reason=SKIP_ALL_CHUNKS_FAILED, total_chunks=total_chunks)
 
-    is_partial = failed_count > 0
-    if is_partial:
-        _log.warning(
-            "%s: %d/%d chunks failed — output is mixed-language",
-            paper_dir.name,
-            failed_count,
-            len(chunks),
+        translated_chunks.append(translated)
+        _write_translation_progress(
+            progress_path,
+            {
+                "target_lang": lang,
+                "source_digest": source_digest,
+                "chunk_size": chunk_size,
+                "total_chunks": total_chunks,
+                "next_chunk": i + 1,
+                "translated_chunks": translated_chunks,
+                "updated_at": datetime.now().isoformat(timespec="seconds"),
+            },
         )
-
-    result = "\n\n".join(translated_chunks)
-    out_path.write_text(result, encoding="utf-8")
-    _log.debug("translation saved: %s (%d chars)", out_path.name, len(result))
+        _write_translated_output(out_path, translated_chunks)
 
     # Record translation metadata in meta.json
-    _record_translation_meta(paper_dir, lang, src_lang, config, partial=is_partial)
+    progress_path.unlink(missing_ok=True)
+    _record_translation_meta(paper_dir, lang, src_lang, config, partial=False)
+    report(f"翻译完成: {total_chunks}/{total_chunks} 块")
 
-    return TranslateResult(path=out_path, partial=is_partial)
+    return TranslateResult(path=out_path, completed_chunks=total_chunks, total_chunks=total_chunks)
 
 
 def batch_translate(
@@ -481,7 +572,11 @@ def batch_translate(
     def _do_one(pdir: Path) -> str:
         try:
             tr = translate_paper(pdir, config, target_lang=lang, force=force)
-            return "translated" if tr.ok else "skipped"
+            if tr.ok:
+                return "translated"
+            if tr.partial or tr.skip_reason == SKIP_ALL_CHUNKS_FAILED:
+                return "failed"
+            return "skipped"
         except Exception as e:
             _log.error("translation failed for %s: %s", pdir.name, e)
             return "failed"

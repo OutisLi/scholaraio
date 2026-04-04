@@ -36,6 +36,27 @@ def test_check_dep_group_treats_runtime_import_failure_as_missing(monkeypatch):
     assert "bertopic" in status.missing
 
 
+def test_check_dep_group_suppresses_import_side_effect_output(monkeypatch, capsys):
+    original = importlib.import_module
+
+    def fake_import(name: str, package=None):
+        if name == "mermaid":
+            print("noisy stdout during import")
+            raise RuntimeError("optional backend warning")
+        if package is None:
+            return original(name)
+        return original(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+
+    status = check_dep_group("draw")
+
+    captured = capsys.readouterr()
+    assert not status.installed
+    assert captured.out == ""
+    assert captured.err == ""
+
+
 def test_check_docling_uses_cli_presence(monkeypatch):
     monkeypatch.setattr("scholaraio.setup.shutil.which", lambda name: "/usr/bin/docling" if name == "docling" else None)
 
@@ -102,6 +123,73 @@ def test_run_check_includes_parser_recommendation(monkeypatch):
     assert "Docling" in labels
     assert "Hugging Face" in labels
     assert "PDF 解析器推荐" in labels
+
+
+def test_run_check_includes_pdf_office_and_draw_dependency_groups(monkeypatch):
+    cfg = Config()
+    monkeypatch.setattr("scholaraio.setup._check_mineru", lambda *_: (True, "mineru ok"))
+    monkeypatch.setattr("scholaraio.setup._check_docling", lambda *_: (True, "docling ok"))
+    monkeypatch.setattr("scholaraio.setup._check_huggingface", lambda *_: (True, "hf ok"))
+    monkeypatch.setattr("scholaraio.setup.recommend_pdf_parser", lambda *args: ("MinerU", "both reachable"))
+
+    results = run_check(cfg, "zh")
+
+    labels = [item.label for item in results]
+    assert "PDF 依赖" in labels
+    assert "Office 依赖" in labels
+    assert "绘图依赖" in labels
+
+
+def test_check_dep_group_supports_draw_extra(monkeypatch):
+    original = importlib.import_module
+
+    def fake_import(name: str, package=None):
+        if name == "cli_anything":
+            raise RuntimeError("bad optional import")
+        if package is None:
+            return original(name)
+        return original(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+
+    status = check_dep_group("draw")
+
+    assert not status.installed
+    assert "cli-anything-inkscape" in status.missing
+
+
+def test_check_dep_group_treats_oserror_import_failure_as_missing(monkeypatch):
+    original = importlib.import_module
+
+    def fake_import(name: str, package=None):
+        if name == "bertopic":
+            raise OSError("libstdc++.so missing")
+        if package is None:
+            return original(name)
+        return original(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+
+    status = check_dep_group("topics")
+
+    assert not status.installed
+    assert "bertopic" in status.missing
+
+
+def test_check_dep_group_uses_spec_probe_for_embed_deps(monkeypatch):
+    original = importlib.util.find_spec
+
+    def fake_find_spec(name: str, package=None):
+        if name == "faiss":
+            return None
+        return original(name, package)
+
+    monkeypatch.setattr(importlib.util, "find_spec", fake_find_spec)
+
+    status = check_dep_group("embed")
+
+    assert not status.installed
+    assert "faiss-cpu" in status.missing
 
 
 def test_check_mineru_reports_actionable_failure(monkeypatch):

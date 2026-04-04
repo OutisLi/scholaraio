@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Semantic Scholar API key support**: Configure `ingest.s2_api_key` (or env var `S2_API_KEY`) to authenticate Semantic Scholar requests, increasing rate limits from 100 req/5min (public) to 1 req/s (authenticated); polite delay automatically reduced from 3s to 1s when key is present
 - **PDF parser benchmark harness**: Added `scholaraio/ingest/parser_matrix_benchmark.py` plus tests for comparing Docling / MinerU / PyMuPDF parser runs and configuration matrices
 - **Parser-aware setup guidance**: `scholaraio setup` and the setup skill now explain MinerU vs Docling selection, provide official deployment links, note that MinerU cloud API keys are free to apply for, and warn agent users about sandbox/network mis-detection
+- **Insights analytics module coverage**: `scholaraio.insights` now owns reusable behavior-analysis helpers, with dedicated tests plus CLI smoke coverage for `scholaraio insights`
 
 ### Fixed
 
@@ -19,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **PDF parser fallback flow**: Batch conversion and `attach-pdf` now follow the same MinerU → fallback behavior as the main ingest path; fallback assets are preserved; unsupported parser options from the previous broader design were removed so the active chain matches the current MinerU / Docling / PyMuPDF strategy
 - **Setup robustness for agents**: `setup` / `setup check` no longer fail hard when `metrics.db` is locked, parser recommendations honor an already-configured MinerU key before network probing, and interactive prompts treat EOF as empty input so agent-driven stdin does not crash the wizard
 - **Docs consistency**: README, README_CN, AGENTS, and CLAUDE now describe the current parser stack and setup behavior consistently
+- **arXiv ingest edge cases**: `scholaraio.sources.arxiv` no longer makes `bs4` a transitive hard dependency for normal metadata flows, and old-style arXiv IDs like `hep-th/9901001` now create parent directories correctly during PDF download
+- **Scientific runtime docs compatibility**: toolref runtime behavior, scientific skills, and published setup/docs metadata now match the refactored `toolref` facade and current extras layout
+- **Optional dependency guidance**: missing-dependency messages and `setup check` now consistently point users to `scholaraio[import]`, `scholaraio[pdf]`, `scholaraio[office]`, and `scholaraio[draw]` instead of raw leaf packages
+- **Translate / enrich CLI feedback and recovery**: `translate` now reports chunk-level progress, writes `paper_{lang}.md` incrementally, supports resume from `.paper_{lang}.progress.json`, and avoids writing fake success output when every chunk fails; `enrich-toc` now reports start/success/failure with extracted TOC counts for single-paper runs
+- **Workspace removal and refetch status accuracy**: `ws remove` now falls back to exact workspace `dir_name` matching when registry lookup misses, and `refetch` no longer reports spurious updates when API enrichment returns no authoritative data
 
 ### Removed
 

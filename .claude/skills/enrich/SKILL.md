@@ -49,6 +49,8 @@ scholaraio backfill-abstract [--dry-run] [--doi-fetch]
 - `--doi-fetch` — 从出版商网页抓取官方 abstract（覆盖现有，需联网）
 
 4. 展示处理结果。
+   - `enrich-toc` 现在会显示开始提取、是否成功、以及提取出的 TOC 节数
+   - 单篇处理不再只是打印论文名
 
 ## 示例
 
@@ -57,6 +59,9 @@ scholaraio backfill-abstract [--dry-run] [--doi-fetch]
 
 用户说："重新提取 Smith-2023-Survey 的目录"
 → 执行 `enrich-toc "Smith-2023-Survey" --force`
+
+用户说："帮我看看这篇论文 TOC 提取成功没有"
+→ 执行 `enrich-toc "<paper-id>" --force`，并根据终端输出确认 `TOC 提取完成: N 节`
 
 用户说："补全摘要"
 → 执行 `backfill-abstract`，然后提示 `embed --rebuild`

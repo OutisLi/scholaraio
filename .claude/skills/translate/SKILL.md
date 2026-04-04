@@ -10,6 +10,12 @@ tags: ["academic", "papers", "translation", "multilingual"]
 
 将论文 Markdown 翻译为目标语言（默认中文），保留 LaTeX 公式、代码块、图片引用和 Markdown 格式。翻译结果保存为 `paper_{lang}.md`，原文保持不变。
 
+当前实现支持：
+- 单篇翻译时在终端显示块级进度
+- 每成功翻译一块就立即刷新 `paper_{lang}.md`
+- 中途中断后可从本地 checkpoint 继续续翻
+- `--force` 会清理旧 checkpoint 并从头重新翻译
+
 ## 配置
 
 `config.yaml` 中可设置默认行为：
@@ -58,8 +64,34 @@ scholaraio pipeline --steps toc,l3,translate
 2. 如果已是目标语言，跳过
 3. 将 Markdown 按段落边界分块（保留代码块和公式完整性）
 4. 通过 LLM 逐块翻译，保留所有格式标记
-5. 合并翻译结果，保存为 `paper_{lang}.md`
-6. 在 `meta.json` 中记录翻译元数据
+5. 每成功一块就增量写出 `paper_{lang}.md`
+6. 同步写入本地 checkpoint：`.paper_{lang}.progress.json`
+7. 若中途中断，下次再次运行同一命令时自动从已完成块继续
+8. 全部完成后删除 checkpoint，并在 `meta.json` 中记录翻译元数据
+
+## 进度与续翻
+
+单篇翻译会输出：
+- 总块数
+- 当前块进度（如 `翻译进度: 3/12`）
+- 中断位置
+- 是否可续翻
+
+如果中途中断：
+
+```bash
+scholaraio translate "<paper-id>" --lang zh
+```
+
+会自动检测 `.paper_zh.progress.json`，并从上次成功完成的块继续。
+
+如果想忽略已有部分结果并重新开始：
+
+```bash
+scholaraio translate "<paper-id>" --lang zh --force
+```
+
+会删除旧的 checkpoint 和旧的 `paper_zh.md`，从头重新翻译。
 
 ## 示例
 
@@ -74,3 +106,6 @@ scholaraio pipeline --steps toc,l3,translate
 
 用户说："重新翻译这篇论文"
 -> 执行 `scholaraio translate "<paper-id>" --force`
+
+用户说："上次翻译到一半断了，继续翻"
+-> 直接执行 `scholaraio translate "<paper-id>" --lang zh`

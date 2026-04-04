@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from argparse import Namespace
 from pathlib import Path
 from types import SimpleNamespace
 
 from scholaraio import cli
 from scholaraio.setup import _S
+from scholaraio.translate import TranslateResult
 
 
 class TestSetupImportHints:
@@ -26,6 +28,36 @@ class TestSetupImportHints:
         assert "--api-key <API_KEY>" in zh_hint
         assert "--collection <COLLECTION_KEY>" in zh_hint
         assert "scholaraio import-zotero --local /path/to/zotero.sqlite\n" in zh_hint
+
+
+class TestCliHelpLocalization:
+    def test_setup_help_is_fully_localized(self):
+        parser = cli._build_parser()
+        setup_parser = parser._subparsers._group_actions[0].choices["setup"]
+        setup_help = setup_parser.format_help()
+        setup_check = setup_parser._subparsers._group_actions[0].choices["check"].format_help()
+
+        assert "默认进入交互式安装向导" in setup_help
+        assert "检查环境状态" in setup_help
+        assert "输出语言（zh 或 en，默认 zh）" in setup_check
+        assert "Start the interactive setup wizard" not in setup_help
+        assert "Check environment status" not in setup_help
+        assert "Output language" not in setup_check
+
+    def test_migrate_execute_help_uses_chinese_preview_wording(self):
+        parser = cli._build_parser()
+        migrate_help = parser._subparsers._group_actions[0].choices["migrate-dirs"].format_help()
+
+        assert "实际执行迁移（默认先预览）" in migrate_help
+        assert "dry-run" not in migrate_help
+
+    def test_toolref_fetch_help_uses_prefix_free_version_example(self):
+        parser = cli._build_parser()
+        toolref_parser = parser._subparsers._group_actions[0].choices["toolref"]
+        toolref_fetch = toolref_parser._subparsers._group_actions[0].choices["fetch"].format_help()
+
+        assert "版本号（如 7.5, 22Jul2025_update3）" in toolref_fetch
+        assert "stable_22Jul2025_update3" not in toolref_fetch
 
 
 class TestShowLayer4Headings:
@@ -143,6 +175,288 @@ class TestSearchResultFormatting:
 
         assert messages
         assert "( [])" not in messages[0]
+
+
+class TestToolrefCliMessages:
+    def test_toolref_show_output_is_localized(self, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.toolref.toolref_show",
+            lambda tool, *path, cfg=None: [
+                {
+                    "page_name": "pw.x/SYSTEM/ecutwfc",
+                    "section": "SYSTEM",
+                    "program": "pw.x",
+                    "synopsis": "wavefunction cutoff",
+                    "content": "content body",
+                }
+            ],
+        )
+
+        args = Namespace(toolref_action="show", tool="qe", path=["pw", "ecutwfc"])
+
+        cli.cmd_toolref(args, SimpleNamespace())
+
+        assert any("pw.x/SYSTEM/ecutwfc" in m for m in messages)
+        assert any("段落：" in m and "程序：" in m for m in messages)
+        assert all("📖" not in m for m in messages)
+        assert all("Namelist:" not in m for m in messages)
+        assert all("Program:" not in m for m in messages)
+
+
+class TestArxivCommands:
+    def test_arxiv_fetch_downloads_to_inbox_without_ingest(self, tmp_path, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        downloaded = tmp_path / "data" / "inbox" / "2603.25200.pdf"
+
+        def fake_download(arxiv_ref, dest_dir, *, overwrite=False):
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            downloaded.write_bytes(b"%PDF")
+            return downloaded
+
+        monkeypatch.setattr("scholaraio.sources.arxiv.download_arxiv_pdf", fake_download)
+
+        cfg = SimpleNamespace(_root=tmp_path, papers_dir=tmp_path / "data" / "papers")
+        args = Namespace(arxiv_ref="2603.25200", ingest=False, force=False, dry_run=False)
+
+        cli.cmd_arxiv_fetch(args, cfg)
+
+        assert downloaded.exists()
+        assert any("已下载到 inbox" in m for m in messages)
+
+    def test_arxiv_fetch_ingest_uses_temp_inbox_pipeline(self, tmp_path, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        def fake_download(arxiv_ref, dest_dir, *, overwrite=False):
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            out = dest_dir / "2603.25200.pdf"
+            out.write_bytes(b"%PDF")
+            return out
+
+        seen: dict[str, object] = {}
+
+        def fake_run_pipeline(step_names, cfg, opts):
+            seen["steps"] = step_names
+            seen["inbox_dir"] = opts["inbox_dir"]
+            seen["opts"] = opts
+
+        monkeypatch.setattr("scholaraio.sources.arxiv.download_arxiv_pdf", fake_download)
+        monkeypatch.setattr("scholaraio.ingest.pipeline.run_pipeline", fake_run_pipeline)
+
+        cfg = SimpleNamespace(_root=tmp_path, papers_dir=tmp_path / "data" / "papers")
+        args = Namespace(arxiv_ref="2603.25200", ingest=True, force=False, dry_run=False)
+
+        cli.cmd_arxiv_fetch(args, cfg)
+
+        assert seen["steps"] == ["mineru", "extract", "dedup", "ingest", "embed", "index"]
+        assert seen["inbox_dir"] != cfg._root / "data" / "inbox"
+        assert seen["opts"]["include_aux_inboxes"] is False
+        assert any("开始直接入库" in m for m in messages)
+
+    def test_arxiv_fetch_reports_download_failure(self, tmp_path, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.sources.arxiv.download_arxiv_pdf",
+            lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("timeout")),
+        )
+
+        cfg = SimpleNamespace(_root=tmp_path, papers_dir=tmp_path / "data" / "papers")
+        args = Namespace(arxiv_ref="2603.25200", ingest=False, force=False, dry_run=False)
+
+        cli.cmd_arxiv_fetch(args, cfg)
+
+        assert any("arXiv 下载失败" in m for m in messages)
+
+
+class TestFederatedArxivPresence:
+    def test_fsearch_marks_arxiv_only_ingested_paper_as_present(self, tmp_path, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", lambda msg="": messages.append(msg))
+        monkeypatch.setattr(
+            cli,
+            "_search_arxiv",
+            lambda query, top_k: [
+                {
+                    "title": "String Junctions and Their Duals in Heterotic String Theory",
+                    "authors": ["Y. Imamura"],
+                    "year": "1999",
+                    "arxiv_id": "hep-th/9901001",
+                    "doi": "",
+                }
+            ],
+        )
+        monkeypatch.setattr(cli, "_query_dois_for_set", lambda cfg, doi_set: set())
+
+        paper_dir = tmp_path / "papers" / "Imamura-1999-String-Junctions"
+        paper_dir.mkdir(parents=True)
+        (paper_dir / "meta.json").write_text(
+            json.dumps(
+                {
+                    "id": "paper-1",
+                    "title": "String Junctions and Their Duals in Heterotic String Theory",
+                    "arxiv_id": "hep-th/9901001v3",
+                    "ids": {"arxiv": "hep-th/9901001v3"},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg = SimpleNamespace(papers_dir=tmp_path / "papers", index_db=tmp_path / "missing.db")
+        args = Namespace(query=["string", "junctions"], scope="arxiv", top=5)
+
+        cli.cmd_fsearch(args, cfg)
+
+        assert any("[已入库]" in m for m in messages)
+
+
+class TestTranslateCliProgress:
+    def test_cmd_translate_reports_resumable_partial_progress(self, tmp_papers, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(cli, "_resolve_paper", lambda paper_id, cfg: tmp_papers / paper_id)
+        monkeypatch.setattr(
+            "scholaraio.translate.translate_paper",
+            lambda *args, **kwargs: TranslateResult(
+                path=(tmp_papers / "Smith-2023-Turbulence" / "paper_zh.md"),
+                partial=True,
+                completed_chunks=2,
+                total_chunks=5,
+            ),
+        )
+
+        cfg = SimpleNamespace(
+            papers_dir=tmp_papers,
+            translate=SimpleNamespace(target_lang="zh"),
+        )
+        args = Namespace(paper_id="Smith-2023-Turbulence", lang="zh", force=True, all=False)
+
+        try:
+            cli.cmd_translate(args, cfg)
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected SystemExit")
+
+        assert any("已完成 2/5 块" in m for m in messages)
+        assert any("可稍后继续续翻" in m for m in messages)
+
+
+class TestEnrichTocCliProgress:
+    def test_cmd_enrich_toc_reports_single_paper_success(self, tmp_papers, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        def fake_enrich_toc(json_path, md_path, cfg, *, force=False, inspect=False):
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            data["toc"] = [{"line": 1, "level": 1, "title": "Introduction"}]
+            json_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            return True
+
+        monkeypatch.setattr("scholaraio.loader.enrich_toc", fake_enrich_toc)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers)
+        args = Namespace(all=False, paper_id="Smith-2023-Turbulence", force=True, inspect=False)
+
+        cli.cmd_enrich_toc(args, cfg)
+
+        assert any("开始提取 TOC" in m for m in messages)
+        assert any("TOC 提取完成" in m and "1 节" in m for m in messages)
+
+
+class TestImportEndnoteOptionalDeps:
+    def test_import_endnote_reports_missing_optional_dependency(self, tmp_path, monkeypatch):
+        src = tmp_path / "library.xml"
+        src.write_text("<xml />", encoding="utf-8")
+
+        errors: list[str] = []
+
+        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            "scholaraio.sources.endnote._load_endnote_core",
+            lambda: (_ for _ in ()).throw(ModuleNotFoundError("No module named 'endnote_utils'", name="endnote_utils")),
+        )
+
+        cfg = SimpleNamespace()
+        args = Namespace(files=[str(src)], no_api=False, dry_run=True, no_convert=False)
+
+        try:
+            cli.cmd_import_endnote(args, cfg)
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected SystemExit")
+
+        assert any("缺少依赖: endnote_utils" in msg for msg in errors)
+        assert any("pip install scholaraio[import]" in msg for msg in errors)
+
+
+class TestOptionalDependencyHints:
+    def test_office_dependency_hint_uses_scholaraio_extra(self, monkeypatch):
+        errors: list[str] = []
+        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+
+        try:
+            cli._check_import_error(ModuleNotFoundError("No module named 'docx'", name="docx"))
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected SystemExit")
+
+        assert any("缺少依赖: docx" in msg for msg in errors)
+        assert any("pip install scholaraio[office]" in msg for msg in errors)
+
+    def test_pdf_dependency_hint_uses_scholaraio_extra(self, monkeypatch):
+        errors: list[str] = []
+        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+
+        try:
+            cli._check_import_error(ModuleNotFoundError("No module named 'fitz'", name="fitz"))
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected SystemExit")
+
+        assert any("缺少依赖: fitz" in msg for msg in errors)
+        assert any("pip install scholaraio[pdf]" in msg for msg in errors)
+
+
+class TestMigrateDirsMessages:
+    def test_migrate_dirs_preview_message_is_chinese(self, tmp_path, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.migrate.migrate_to_dirs",
+            lambda papers_dir, dry_run: {"migrated": 2, "skipped": 1, "failed": 0},
+        )
+
+        cfg = SimpleNamespace(papers_dir=tmp_path / "papers")
+        args = Namespace(execute=False)
+
+        cli.cmd_migrate_dirs(args, cfg)
+
+        assert any("迁移完成（预览）" in msg for msg in messages)
+        assert not any("dry-run" in msg or "executed" in msg for msg in messages)
+
+    def test_migrate_dirs_execute_message_is_chinese(self, tmp_path, monkeypatch):
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.migrate.migrate_to_dirs",
+            lambda papers_dir, dry_run: {"migrated": 1, "skipped": 0, "failed": 0},
+        )
+
+        cfg = SimpleNamespace(papers_dir=tmp_path / "papers")
+        args = Namespace(execute=True)
+
+        cli.cmd_migrate_dirs(args, cfg)
+
+        assert any("迁移完成（已执行）" in msg for msg in messages)
+        assert not any("dry-run" in msg or "executed" in msg for msg in messages)
 
 
 class TestAttachPdfFallback:

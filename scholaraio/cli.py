@@ -52,8 +52,10 @@ cli.py — scholaraio 命令行入口
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
+import tempfile
 from pathlib import Path
 
 from scholaraio.config import load_config
@@ -142,6 +144,11 @@ _INSTALL_HINTS: dict[str, str] = {
     "pandas": "pip install scholaraio[topics]",
     "endnote_utils": "pip install scholaraio[import]",
     "pyzotero": "pip install scholaraio[import]",
+    "docx": "pip install scholaraio[office]",
+    "pptx": "pip install scholaraio[office]",
+    "openpyxl": "pip install scholaraio[office]",
+    "markitdown": "pip install scholaraio[office]",
+    "fitz": "pip install scholaraio[pdf]",
 }
 
 
@@ -560,6 +567,7 @@ def cmd_enrich_toc(args: argparse.Namespace, cfg) -> None:
             continue
 
         ui(f"\n{json_path.parent.name}")
+        ui("  开始提取 TOC...")
         success = enrich_toc(
             json_path,
             md_path,
@@ -569,8 +577,14 @@ def cmd_enrich_toc(args: argparse.Namespace, cfg) -> None:
         )
         if success:
             ok += 1
+            try:
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+                ui(f"  TOC 提取完成: {len(data.get('toc', []))} 节")
+            except (OSError, json.JSONDecodeError):
+                ui("  TOC 提取完成")
         else:
             fail += 1
+            ui("  TOC 提取失败")
 
     if args.all or len(targets) > 1:
         ui(f"\n完成: {ok} 成功 | {fail} 失败 | {skip} 跳过")
@@ -776,6 +790,88 @@ def cmd_shared_refs(args: argparse.Namespace, cfg) -> None:
         ui()
 
 
+def cmd_toolref(args: argparse.Namespace, cfg) -> None:
+    from scholaraio.toolref import (
+        TOOL_REGISTRY,
+        toolref_fetch,
+        toolref_list,
+        toolref_search,
+        toolref_show,
+        toolref_use,
+    )
+
+    try:
+        action = args.toolref_action
+
+        if action == "fetch":
+            count = toolref_fetch(args.tool, version=args.version, force=args.force, cfg=cfg)
+            if count == 0:
+                ui("未索引任何页面。请检查版本号或文档源。")
+
+        elif action == "show":
+            results = toolref_show(args.tool, *args.path, cfg=cfg)
+            if not results:
+                ui(f"未找到匹配：{args.tool} {' '.join(args.path)}")
+                ui(f"尝试搜索：scholaraio toolref search {args.tool} {' '.join(args.path)}")
+                return
+            for r in results:
+                ui(f"\n{'=' * 60}")
+                ui(r["page_name"])
+                if r.get("section"):
+                    ui(f"   段落：{r['section']}  |  程序：{r.get('program', '')}")
+                if r.get("synopsis"):
+                    ui(f"   {r['synopsis']}")
+                ui(f"{'─' * 60}")
+                ui(r.get("content", "(无内容)"))
+
+        elif action == "search":
+            query = " ".join(args.query)
+            results = toolref_search(
+                args.tool,
+                query,
+                top_k=args.top,
+                program=args.program,
+                section=args.section,
+                cfg=cfg,
+            )
+            if not results:
+                ui(f"无结果：{query}")
+                return
+            ui(f"找到 {len(results)} 条结果：\n")
+            for i, r in enumerate(results, 1):
+                synopsis = r.get("synopsis", "")[:80]
+                ui(f"  {i:2d}. [{r['page_name']}] {synopsis}")
+
+        elif action == "list":
+            entries = toolref_list(args.tool, cfg=cfg)
+            if not entries:
+                tools = ", ".join(TOOL_REGISTRY.keys())
+                ui(f"无已拉取文档。支持的工具：{tools}")
+                ui("使用 `scholaraio toolref fetch <tool> --version <ver>` 拉取")
+                return
+            current_tool = ""
+            for e in entries:
+                if e["tool"] != current_tool:
+                    current_tool = e["tool"]
+                    ui(f"\n{e['display_name']}:")
+                marker = " (current)" if e["is_current"] else ""
+                completeness = ""
+                unit = "页" if e.get("source_type") == "manifest" else "条"
+                if e.get("source_type") == "manifest" and e.get("expected_pages"):
+                    completeness = f" [{e['page_count']}/{e['expected_pages']} 已索引"
+                    failed_pages = e.get("failed_pages")
+                    if failed_pages:
+                        completeness += f", {failed_pages} 失败"
+                    completeness += "]"
+                ui(f"  {e['version']}{marker} — {e['page_count']} {unit}{completeness}")
+
+        elif action == "use":
+            toolref_use(args.tool, args.version, cfg=cfg)
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        _log.error("%s", e)
+        sys.exit(1)
+
+
 def cmd_translate(args: argparse.Namespace, cfg) -> None:
     from scholaraio.translate import batch_translate, translate_paper
 
@@ -794,11 +890,23 @@ def cmd_translate(args: argparse.Namespace, cfg) -> None:
 
     if args.paper_id:
         paper_d = _resolve_paper(args.paper_id, cfg)
-        tr = translate_paper(paper_d, cfg, target_lang=target_lang, force=args.force)
+        tr = translate_paper(
+            paper_d,
+            cfg,
+            target_lang=target_lang,
+            force=args.force,
+            progress_callback=ui,
+        )
         if tr.ok:
             ui(f"翻译完成: {tr.path}")
         else:
-            from scholaraio.translate import SKIP_ALREADY_EXISTS, SKIP_EMPTY, SKIP_NO_MD, SKIP_SAME_LANG
+            from scholaraio.translate import (
+                SKIP_ALL_CHUNKS_FAILED,
+                SKIP_ALREADY_EXISTS,
+                SKIP_EMPTY,
+                SKIP_NO_MD,
+                SKIP_SAME_LANG,
+            )
 
             _skip_messages = {
                 SKIP_NO_MD: "跳过: 该论文目录下无 paper.md 文件",
@@ -806,6 +914,15 @@ def cmd_translate(args: argparse.Namespace, cfg) -> None:
                 SKIP_SAME_LANG: f"跳过: 论文已是目标语言 ({target_lang})",
                 SKIP_ALREADY_EXISTS: "跳过: 翻译已存在（使用 --force 强制重新翻译）",
             }
+            if tr.partial and tr.path:
+                ui(
+                    f"翻译中断：已完成 {tr.completed_chunks}/{tr.total_chunks} 块，"
+                    f"当前结果已写入 {tr.path}，可稍后继续续翻"
+                )
+                sys.exit(1)
+            if tr.skip_reason == SKIP_ALL_CHUNKS_FAILED:
+                ui("翻译失败: 所有分块都翻译失败，未写出目标文件")
+                sys.exit(1)
             ui(_skip_messages.get(tr.skip_reason, "跳过"))
     elif args.all:
         ui(f"批量翻译 → {target_lang}")
@@ -1797,6 +1914,38 @@ def _query_dois_for_set(cfg, doi_set: list[str]) -> set[str]:
         return set()
 
 
+def _query_arxiv_ids_for_set(cfg, arxiv_id_set: list[str]) -> set[str]:
+    """Return the subset of normalized arXiv IDs that exists in the main library."""
+    from scholaraio.papers import iter_paper_dirs, read_meta
+    from scholaraio.sources.arxiv import normalize_arxiv_ref
+
+    if not arxiv_id_set or not Path(cfg.papers_dir).exists():
+        return set()
+
+    wanted: set[str] = set()
+    for arxiv_id in arxiv_id_set:
+        normalized = normalize_arxiv_ref(arxiv_id)
+        if normalized:
+            wanted.add(normalized)
+    if not wanted:
+        return set()
+
+    found: set[str] = set()
+    try:
+        for paper_dir in iter_paper_dirs(Path(cfg.papers_dir)):
+            try:
+                meta = read_meta(paper_dir)
+            except Exception:
+                continue
+            arxiv_id = meta.get("arxiv_id") or (meta.get("ids") or {}).get("arxiv", "")
+            normalized = normalize_arxiv_ref(arxiv_id)
+            if normalized and normalized in wanted:
+                found.add(normalized)
+    except Exception:
+        return set()
+    return found
+
+
 def cmd_fsearch(args: argparse.Namespace, cfg) -> None:
     query = " ".join(args.query)
     top_k = _resolve_top(args, 10)
@@ -1880,19 +2029,109 @@ def cmd_fsearch(args: argparse.Namespace, cfg) -> None:
             else:
                 # Only query the library for DOIs that actually appear in results
                 arxiv_dois = [r["doi"].lower() for r in arxiv_results if r.get("doi")]
+                arxiv_ids = [r.get("arxiv_id", "") for r in arxiv_results if r.get("arxiv_id")]
                 in_lib_dois = _query_dois_for_set(cfg, arxiv_dois)
+                in_lib_arxiv_ids = _query_arxiv_ids_for_set(cfg, arxiv_ids)
                 for i, r in enumerate(arxiv_results, 1):
+                    from scholaraio.sources.arxiv import normalize_arxiv_ref
+
                     authors = r.get("authors", [])
                     first = (authors[0] if authors else "?") + (" et al." if len(authors) > 1 else "")
                     doi = r.get("doi", "")
-                    in_lib = bool(doi and doi.lower() in in_lib_dois)
+                    arxiv_id = r.get("arxiv_id", "")
+                    normalized_arxiv_id = normalize_arxiv_ref(arxiv_id)
+                    in_lib = bool(
+                        (doi and doi.lower() in in_lib_dois)
+                        or (normalized_arxiv_id and normalized_arxiv_id in in_lib_arxiv_ids)
+                    )
                     status = "  [已入库]" if in_lib else ""
                     ui(f"  [{i}] [{r.get('year', '?')}] {r.get('title', '')}{status}")
-                    ui(f"       {first} | arxiv:{r.get('arxiv_id', '')}" + (f" | doi:{doi}" if doi else ""))
+                    ui(f"       {first} | arxiv:{arxiv_id}" + (f" | doi:{doi}" if doi else ""))
                     ui()
 
         else:
             ui(f"  未知 scope: {scope}，支持: main / explore:NAME / explore:* / arxiv")
+
+
+# ============================================================================
+#  arXiv
+# ============================================================================
+
+
+def cmd_arxiv_search(args: argparse.Namespace, cfg) -> None:
+    from scholaraio.sources.arxiv import search_arxiv
+
+    query = " ".join(args.query).strip()
+    top_k = _resolve_top(args, 10)
+    category = (args.category or "").strip()
+    sort = args.sort or "relevance"
+
+    if not query and not category:
+        ui("请至少提供检索词，或使用 --category 指定 arXiv 分类。")
+        return
+
+    ui(f'arXiv 搜索: query="{query or "*"}" category={category or "-"} sort={sort}\n')
+
+    try:
+        results = search_arxiv(query, top_k=top_k, category=category, sort=sort)
+    except Exception as e:
+        ui(f"arXiv 搜索失败: {e}")
+        return
+    if not results:
+        ui("arXiv 不可用或无结果")
+        return
+
+    for i, r in enumerate(results, 1):
+        authors = r.get("authors", [])
+        first = (authors[0] if authors else "?") + (" et al." if len(authors) > 1 else "")
+        ui(f"  [{i}] [{r.get('year', '?')}] {r.get('title', '')}")
+        ui(f"       {first} | arxiv:{r.get('arxiv_id', '')}")
+        if r.get("doi"):
+            ui(f"       doi:{r['doi']}")
+        if r.get("abstract"):
+            ui(f"       {r['abstract'][:220]}{'...' if len(r['abstract']) > 220 else ''}")
+        ui()
+
+
+def cmd_arxiv_fetch(args: argparse.Namespace, cfg) -> None:
+    from scholaraio.ingest.pipeline import PRESETS, run_pipeline
+    from scholaraio.sources.arxiv import download_arxiv_pdf, normalize_arxiv_ref
+
+    canonical_id = normalize_arxiv_ref(args.arxiv_ref)
+    if not canonical_id:
+        ui(f"无效的 arXiv 标识或 URL: {args.arxiv_ref}")
+        return
+
+    if args.dry_run:
+        if args.ingest:
+            ui(f"[dry-run] 将下载 arXiv PDF 并直接入库: {canonical_id}")
+        else:
+            ui(f"[dry-run] 将下载 arXiv PDF 到 inbox: {canonical_id}")
+        return
+
+    if args.ingest:
+        ui(f"开始直接入库 arXiv 预印本: {canonical_id}")
+        try:
+            with tempfile.TemporaryDirectory(prefix="scholaraio_arxiv_") as tmpdir:
+                tmp_inbox = Path(tmpdir)
+                pdf_path = download_arxiv_pdf(canonical_id, tmp_inbox, overwrite=args.force)
+                ui(f"已下载 PDF: {pdf_path.name}")
+                run_pipeline(
+                    PRESETS["ingest"],
+                    cfg,
+                    {"inbox_dir": tmp_inbox, "force": args.force, "include_aux_inboxes": False},
+                )
+        except Exception as e:
+            ui(f"arXiv 下载或入库失败: {e}")
+        return
+
+    inbox_dir = cfg._root / "data" / "inbox"
+    try:
+        pdf_path = download_arxiv_pdf(canonical_id, inbox_dir, overwrite=args.force)
+    except Exception as e:
+        ui(f"arXiv 下载失败: {e}")
+        return
+    ui(f"已下载到 inbox: {pdf_path}")
 
 
 # ============================================================================
@@ -1901,10 +2140,9 @@ def cmd_fsearch(args: argparse.Namespace, cfg) -> None:
 
 
 def cmd_insights(args: argparse.Namespace, cfg) -> None:
-    import json as _json
-    from collections import Counter
     from datetime import datetime, timedelta, timezone
 
+    from scholaraio import insights
     from scholaraio.metrics import get_store
 
     store = get_store()
@@ -1930,112 +2168,20 @@ def cmd_insights(args: argparse.Namespace, cfg) -> None:
 
     ui(f"=== 科研行为分析（过去 {days} 天）===\n")
 
-    # 1. Top 10 search keywords
-    _STOPWORDS = {
-        "a",
-        "an",
-        "the",
-        "of",
-        "in",
-        "on",
-        "at",
-        "to",
-        "for",
-        "with",
-        "by",
-        "and",
-        "or",
-        "is",
-        "are",
-        "was",
-        "were",
-        "be",
-        "been",
-        "have",
-        "has",
-        "do",
-        "does",
-        "this",
-        "that",
-        "it",
-        "its",
-        "from",
-        "as",
-        "via",
-        "using",
-        "based",
-    }
-    word_counts: Counter = Counter()
-    for ev in search_events:
-        detail_raw = ev.get("detail") or ""
-        if detail_raw:
-            try:
-                detail = _json.loads(detail_raw)
-                q = detail.get("query", "")
-            except Exception:
-                q = ""
-        else:
-            q = ""
-        if q:
-            for w in q.lower().split():
-                w = w.strip("\"',.:;!?()[]{}")
-                if w and w not in _STOPWORDS and len(w) > 1:
-                    word_counts[w] += 1
-
     ui("【搜索热词前 10】")
-    if word_counts:
-        for word, cnt in word_counts.most_common(10):
+    hot_keywords = insights.extract_hot_keywords(search_events, top_k=10)
+    if hot_keywords:
+        for word, cnt in hot_keywords:
             bar = "█" * min(cnt, 20)
             ui(f"  {word:<20s} {bar} ({cnt})")
     else:
         ui("  暂无搜索记录")
     ui()
 
-    # 2. Top 10 most-read papers — aggregate by resolved title to dedup UUID vs dir_name variants
-    # First pass: count by name and collect one detail payload per name (cheaply).
-    papers_dir = cfg.papers_dir
-    name_counts: Counter = Counter()
-    name_to_detail_title: dict[str, str] = {}  # title from recorded detail (fast)
-
-    for ev in read_events:
-        name = ev.get("name", "")
-        if not name:
-            continue
-        name_counts[name] += 1
-        if name not in name_to_detail_title and ev.get("detail"):
-            try:
-                d = _json.loads(ev["detail"])
-                t = d.get("title", "")
-                if t:
-                    name_to_detail_title[name] = t
-            except Exception:
-                pass
-
-    # Build title map for ALL names using already-recorded detail.title (zero disk I/O).
-    # This ensures the aggregation below correctly merges UUID/dir_name variants for any paper.
-    pid_to_title: dict[str, str] = dict(name_to_detail_title)
-
-    # Disk reads only for the top-10 names still missing a title (≤10 reads total).
-    for name, _ in name_counts.most_common(10):
-        if not pid_to_title.get(name):
-            meta_path = papers_dir / name / "meta.json"
-            if meta_path.exists():
-                try:
-                    meta = _json.loads(meta_path.read_text("utf-8"))
-                    t = meta.get("title", "")
-                    if t:
-                        pid_to_title[name] = t
-                except Exception:
-                    pass
-
-    title_read_counts: Counter = Counter()
-    for name, cnt in name_counts.items():
-        title_key = pid_to_title.get(name) or name
-        title_read_counts[title_key] += cnt
-
     ui("【最常阅读论文前 10】")
-    if title_read_counts:
-        for rank, (title_key, cnt) in enumerate(title_read_counts.most_common(10), 1):
+    most_read = insights.aggregate_most_read_titles(read_events, cfg.papers_dir, top_k=10)
+    if most_read:
+        for rank, (title_key, cnt) in enumerate(most_read, 1):
             label = title_key[:60]
             ui(f"  {rank:2d}. [{cnt}次] {label}")
     else:
@@ -2045,20 +2191,10 @@ def cmd_insights(args: argparse.Namespace, cfg) -> None:
     # 3. Weekly read-count trend (ASCII bar chart)
     ui("【阅读量趋势（按周）】")
     if read_events:
-        week_counts: Counter = Counter()
-        for ev in read_events:
-            ts = ev.get("timestamp", "")
-            if ts:
-                try:
-                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    week_key = dt.strftime("%Y-W%W")
-                    week_counts[week_key] += 1
-                except Exception:
-                    pass
+        week_counts = insights.build_weekly_read_trend(read_events)
         if week_counts:
-            max_count = max(week_counts.values()) or 1
-            for week in sorted(week_counts):
-                cnt = week_counts[week]
+            max_count = max(cnt for _, cnt in week_counts) or 1
+            for week, cnt in week_counts:
                 bar_len = round(cnt / max_count * 20)
                 bar = "█" * bar_len
                 ui(f"  {week}  {bar} {cnt}")
@@ -2072,62 +2208,16 @@ def cmd_insights(args: argparse.Namespace, cfg) -> None:
     ui("【推荐：你可能还没读过的邻近论文】")
     recent_since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     recent_reads = store.query(category="read", since=recent_since, limit=500)
-    # Preserve recency order (store.query returns newest-first); deduplicate while keeping order.
-    _seen: set[str] = set()
-    recent_paper_ids = []
-    for ev in recent_reads:
-        n = ev.get("name")
-        if n and n not in _seen:
-            _seen.add(n)
-            recent_paper_ids.append(n)
+    recent_paper_ids = insights.recent_unique_read_names(recent_reads, limit=5)
 
     if not recent_paper_ids:
         ui("  过去7天无阅读记录，无法推荐")
     else:
-        # Use all-time read history so papers read outside the current window
-        # are not mistakenly recommended as "not yet read".
-        all_read_pids = store.query_distinct_names("read")
         try:
-            from scholaraio.vectors import vsearch
-
-            candidate_scores: dict[str, float] = {}
-            for pid in recent_paper_ids[:5]:  # limit to avoid slow search
-                paper_d = cfg.papers_dir / pid
-                meta_path = paper_d / "meta.json"
-                if not meta_path.exists():
-                    continue
-                try:
-                    meta = _json.loads(meta_path.read_text("utf-8"))
-                    title = meta.get("title", "")
-                    abstract = meta.get("abstract", "")
-                    query_text = f"{title}\n{abstract}".strip()
-                    if not query_text:
-                        continue
-                except Exception:
-                    continue
-                try:
-                    neighbors = vsearch(query_text, cfg.index_db, top_k=10, cfg=cfg)
-                except Exception:
-                    continue
-                for r in neighbors:
-                    n_pid = r.get("dir_name") or r.get("paper_id", "")
-                    if n_pid and n_pid not in all_read_pids:
-                        score = r.get("score", 0.0)
-                        if n_pid not in candidate_scores or candidate_scores[n_pid] < score:
-                            candidate_scores[n_pid] = score
-            if candidate_scores:
-                sorted_candidates = sorted(candidate_scores.items(), key=lambda x: -x[1])[:5]
-                for rank, (pid, score) in enumerate(sorted_candidates, 1):
-                    title = ""
-                    paper_d = cfg.papers_dir / pid
-                    meta_path = paper_d / "meta.json"
-                    if meta_path.exists():
-                        try:
-                            meta = _json.loads(meta_path.read_text("utf-8"))
-                            title = meta.get("title", "")
-                        except Exception:
-                            pass
-                    label = title[:60] if title else pid
+            recommendations = insights.recommend_unread_neighbors(store, cfg, recent_days=7, recent_limit=5, top_k=5)
+            if recommendations:
+                for rank, (_pid, label, score) in enumerate(recommendations, 1):
+                    label = label[:60]
                     ui(f"  {rank}. {label}  (分数: {score:.3f})")
             else:
                 ui("  未找到合适的邻近论文（可能向量索引未建立）")
@@ -2138,19 +2228,10 @@ def cmd_insights(args: argparse.Namespace, cfg) -> None:
     # 5. Active workspaces — list workspaces with paper counts
     ui("【活跃工作区】")
     try:
-        import json as _json2
-
-        from scholaraio.workspace import list_workspaces
-
         ws_root = cfg._root / "workspace"
-        ws_names = list_workspaces(ws_root)
-        if ws_names:
-            for ws_name in ws_names:
-                papers_json = ws_root / ws_name / "papers.json"
-                try:
-                    count = len(_json2.loads(papers_json.read_text("utf-8")))
-                except Exception:
-                    count = 0
+        workspaces = insights.list_workspace_counts(ws_root)
+        if workspaces:
+            for ws_name, count in workspaces:
                 ui(f"  {ws_name:<30s} {count} 篇论文")
         else:
             ui("  暂无工作区")
@@ -2234,8 +2315,8 @@ def cmd_migrate_dirs(args: argparse.Namespace, cfg) -> None:
 
     dry_run = not args.execute
     stats = migrate_to_dirs(cfg.papers_dir, dry_run=dry_run)
-    mode = "dry-run" if dry_run else "executed"
-    ui(f"\n迁移完成 ({mode}): {stats['migrated']} 迁移 | {stats['skipped']} 跳过 | {stats['failed']} 失败")
+    mode = "预览" if dry_run else "已执行"
+    ui(f"\n迁移完成（{mode}）：{stats['migrated']} 迁移 | {stats['skipped']} 跳过 | {stats['failed']} 失败")
     if dry_run and stats["migrated"]:
         ui("添加 --execute 以实际执行迁移")
     if not dry_run and stats["migrated"]:
@@ -2256,7 +2337,11 @@ def cmd_import_endnote(args: argparse.Namespace, cfg) -> None:
             ui(f"错误：文件不存在: {p}")
             sys.exit(1)
 
-    records, pdf_paths = parse_endnote_full(paths)
+    try:
+        records, pdf_paths = parse_endnote_full(paths)
+    except ImportError as e:
+        _check_import_error(e)
+
     if not records:
         ui("未解析到任何记录")
         return
@@ -2776,7 +2861,7 @@ def cmd_citation_check(args: argparse.Namespace, cfg) -> None:
 # ============================================================================
 
 
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scholaraio",
         description="本地学术文献检索工具",
@@ -3119,21 +3204,18 @@ def main() -> None:
     # --- setup ---
     p_setup = sub.add_parser(
         "setup",
-        help="环境检测与安装向导 / Setup wizard",
-        description="默认进入交互式安装向导；使用 `check` 子命令仅做环境诊断。\n"
-        "Start the interactive setup wizard by default; use `check` for diagnostics only.",
+        help="环境检测与安装向导",
+        description="默认进入交互式安装向导；使用 `check` 子命令仅做环境诊断。",
     )
     p_setup.set_defaults(func=cmd_setup)
     p_setup_sub = p_setup.add_subparsers(dest="setup_action")
-    p_setup_check = p_setup_sub.add_parser("check", help="检查环境状态 / Check environment status")
-    p_setup_check.add_argument(
-        "--lang", choices=["en", "zh"], default="zh", help="输出语言 / Output language (default: zh)"
-    )
+    p_setup_check = p_setup_sub.add_parser("check", help="检查环境状态")
+    p_setup_check.add_argument("--lang", choices=["en", "zh"], default="zh", help="输出语言（zh 或 en，默认 zh）")
 
     # --- migrate-dirs ---
     p_migrate = sub.add_parser("migrate-dirs", help="迁移 data/papers/ 从平铺结构到每篇一目录")
     p_migrate.set_defaults(func=cmd_migrate_dirs)
-    p_migrate.add_argument("--execute", action="store_true", help="实际执行迁移（默认 dry-run）")
+    p_migrate.add_argument("--execute", action="store_true", help="实际执行迁移（默认先预览）")
 
     # --- fsearch ---
     p_fsearch = sub.add_parser("fsearch", help="联邦搜索：同时搜索主库、explore 库和 arXiv")
@@ -3146,6 +3228,26 @@ def main() -> None:
         help="搜索范围（逗号分隔）：main / explore:NAME / explore:* / arxiv（默认 main）",
     )
     p_fsearch.add_argument("--top", type=int, default=None, help="每个来源最多返回 N 条（默认 10）")
+
+    # --- arxiv ---
+    p_arxiv = sub.add_parser("arxiv", help="arXiv 检索与拉取工具")
+    p_arxiv_sub = p_arxiv.add_subparsers(dest="arxiv_action", required=True)
+
+    p_arxiv_search = p_arxiv_sub.add_parser("search", help="搜索 arXiv 预印本")
+    p_arxiv_search.set_defaults(func=cmd_arxiv_search)
+    p_arxiv_search.add_argument("query", nargs="*", help="检索词（可省略，配合 --category 使用）")
+    p_arxiv_search.add_argument("--top", type=int, default=None, help="最多返回 N 条（默认 10）")
+    p_arxiv_search.add_argument("--category", type=str, default="", help="arXiv 分类，如 physics.flu-dyn")
+    p_arxiv_search.add_argument(
+        "--sort", choices=["relevance", "recent"], default="relevance", help="排序方式（默认 relevance）"
+    )
+
+    p_arxiv_fetch = p_arxiv_sub.add_parser("fetch", help="下载 arXiv PDF，可选直接入库")
+    p_arxiv_fetch.set_defaults(func=cmd_arxiv_fetch)
+    p_arxiv_fetch.add_argument("arxiv_ref", help="arXiv ID、arXiv:ID、abs URL 或 pdf URL")
+    p_arxiv_fetch.add_argument("--ingest", action="store_true", help="下载后直接走 ingest pipeline 入库")
+    p_arxiv_fetch.add_argument("--force", action="store_true", help="覆盖已有同名 PDF 或强制 pipeline 处理")
+    p_arxiv_fetch.add_argument("--dry-run", action="store_true", help="预览将要执行的操作")
 
     # --- insights ---
     p_insights = sub.add_parser("insights", help="研究行为分析：搜索热词、最常阅读论文等")
@@ -3194,6 +3296,34 @@ def main() -> None:
     p_l3.add_argument("--inspect", action="store_true", help="展示提取过程详情")
     p_l3.add_argument("--max-retries", type=int, default=2, help="最大重试次数（默认 2）")
 
+    # --- toolref ---
+    p_tr = sub.add_parser("toolref", help="科学计算工具文档查阅（fetch/show/search/list/use）")
+    p_tr.set_defaults(func=cmd_toolref)
+    p_tr_sub = p_tr.add_subparsers(dest="toolref_action", required=True)
+
+    p_trf = p_tr_sub.add_parser("fetch", help="拉取工具文档（git clone → 提取 → 索引）")
+    p_trf.add_argument("tool", help="工具名（qe/lammps/gromacs/openfoam/bioinformatics）")
+    p_trf.add_argument("--version", default=None, help="版本号（如 7.5, 22Jul2025_update3）")
+    p_trf.add_argument("--force", action="store_true", help="强制重新拉取并覆盖本地缓存")
+
+    p_trs = p_tr_sub.add_parser("show", help="查看指定命令/参数的文档")
+    p_trs.add_argument("tool", help="工具名")
+    p_trs.add_argument("path", nargs="+", help="查找路径（如 pw ecutwfc）")
+
+    p_trq = p_tr_sub.add_parser("search", help="全文搜索工具文档")
+    p_trq.add_argument("tool", help="工具名")
+    p_trq.add_argument("query", nargs="+", help="搜索关键词")
+    p_trq.add_argument("--top", type=int, default=20, help="返回条数（默认 20）")
+    p_trq.add_argument("--program", default=None, help="按程序过滤（如 pw.x）")
+    p_trq.add_argument("--section", default=None, help="按 namelist/section 过滤（如 SYSTEM）")
+
+    p_trl = p_tr_sub.add_parser("list", help="列出已有工具文档及版本")
+    p_trl.add_argument("tool", nargs="?", default=None, help="工具名（省略列出全部）")
+
+    p_tru = p_tr_sub.add_parser("use", help="切换工具文档的当前活跃版本")
+    p_tru.add_argument("tool", help="工具名")
+    p_tru.add_argument("version", help="目标版本号")
+
     # --- translate ---
     p_trans = sub.add_parser("translate", help="翻译论文 Markdown 到目标语言")
     p_trans.set_defaults(func=cmd_translate)
@@ -3201,6 +3331,12 @@ def main() -> None:
     p_trans.add_argument("--all", action="store_true", help="批量翻译所有论文")
     p_trans.add_argument("--lang", type=str, default=None, help="目标语言（默认读 config translate.target_lang）")
     p_trans.add_argument("--force", action="store_true", help="强制重新翻译（覆盖已有翻译）")
+
+    return parser
+
+
+def main() -> None:
+    parser = _build_parser()
 
     args = parser.parse_args()
     cfg = load_config()

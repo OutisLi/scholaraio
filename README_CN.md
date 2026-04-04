@@ -11,7 +11,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-26-purple.svg)](.claude/skills/)
+[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-ScholarAIO-purple.svg)](.claude/skills/)
 
 </div>
 
@@ -121,6 +121,8 @@ cp ~/.codex/scholaraio/config.yaml ~/.scholaraio/config.yaml
 | **多格式导出** | BibTeX / RIS / Markdown / DOCX | 导出整个库或工作区——直接用于 Zotero、Endnote、投稿或分享 |
 | **持久化笔记** | 跨会话记忆 | Agent 的分析结果按论文保存（`notes.md`），再次访问时复用已有发现，无需重读全文——省 token、不重复劳动 |
 | **研究洞察** | 阅读行为分析 | 搜索热词、高频阅读论文、阅读趋势、语义近邻推荐——发现你可能忽略的文献 |
+| **联邦发现** | 跨库搜索 | 一条命令同时搜索主库、explore 库和 arXiv；可直接把 arXiv PDF 拉取进 ingest 流水线 |
+| **科学计算工具文档** | 运行时精确查阅 | `toolref` 可入库 Quantum ESPRESSO、LAMMPS、GROMACS、OpenFOAM 与 curated bioinformatics 官方文档，让 agent 更精准回答参数与工作流问题 |
 | **绘图与可视化** | 出版级图表 | Mermaid（流程图、时序图、ER 图、甘特图、思维导图）+ Inkscape 矢量图形——输出 PNG/SVG/PDF |
 | **学术写作** | AI 辅助撰写 | 文献综述、论文章节、引用验证、审稿回复、研究空白分析——每条引用可追溯至你自己的文献库 |
 
@@ -185,7 +187,7 @@ PDF → MinerU → 结构化 Markdown（图表 + LaTeX 公式保留）
 
 完整配置参考 → [`config.yaml`](config.yaml)
 
-## 三种使用方式
+## 两种使用方式
 
 | 模式 | 适用场景 | 命令 |
 |------|---------|------|
@@ -200,6 +202,7 @@ PDF → MinerU → 结构化 Markdown（图表 + LaTeX 公式保留）
 scholaraio search QUERY       关键词检索（FTS5）
 scholaraio vsearch QUERY      语义向量检索
 scholaraio usearch QUERY      融合检索（关键词 + 语义）
+scholaraio fsearch QUERY      联邦搜索（主库 / explore / arXiv）
 scholaraio search-author NAME 按作者搜索
 scholaraio top-cited          按引用量排序
 scholaraio show PAPER         查看论文内容（L1-L4）
@@ -214,6 +217,7 @@ scholaraio enrich-toc         提取目录结构
 scholaraio enrich-l3          提取结论段
 scholaraio backfill-abstract  补全缺失摘要
 scholaraio refetch            重新查询引用量
+scholaraio translate PAPER    将论文 Markdown 翻译到目标语言
 ```
 
 **引用图谱**
@@ -235,10 +239,20 @@ scholaraio topics             BERTopic 主题建模
 scholaraio import-endnote     从 Endnote 导入
 scholaraio import-zotero      从 Zotero 导入
 scholaraio attach-pdf         为已有论文补充 PDF
+scholaraio arxiv search ...   搜索 arXiv 预印本
+scholaraio arxiv fetch ID     下载 arXiv PDF（可直接入库）
 scholaraio export bibtex      导出 BibTeX
 scholaraio ws init NAME       创建工作区
 scholaraio ws add NAME PAPER  添加论文到工作区
 scholaraio ws search NAME Q   工作区内检索
+```
+
+**科学计算与文档**
+```
+scholaraio toolref list       列出已索引科学工具文档
+scholaraio toolref show ...   精确查看参数/命令文档
+scholaraio toolref search ... 搜索科学工具文档
+scholaraio document inspect   检查 DOCX / PPTX / XLSX 结构
 ```
 
 **维护**
@@ -249,6 +263,7 @@ scholaraio rename             标准化目录名
 scholaraio migrate-dirs       迁移旧版目录结构
 scholaraio setup              环境配置向导（默认进入向导，`check` 只做诊断）
 scholaraio metrics            查看 LLM 用量统计
+scholaraio insights [--days N] 阅读行为分析
 ```
 
 </details>
@@ -260,7 +275,7 @@ scholaraio/          # Python 包——CLI、所有核心模块
   ingest/            #   PDF 解析 + 元数据提取流水线
   sources/           #   数据源适配（local / Endnote / Zotero）
 
-.claude/skills/      # 26 个 agent skills（AgentSkills.io 格式）
+.claude/skills/      # agent skills（AgentSkills.io 格式）
 .agents/skills/      # ↑ 符号链接，方便跨 agent 发现
 data/papers/         # 你的论文库（不进 git）
 data/inbox/          # 放入 PDF 即可入库

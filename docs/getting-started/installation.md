@@ -14,7 +14,7 @@ cd scholaraio
 # Core only (search, export, audit)
 pip install -e .
 
-# Full installation (embeddings, topics, import)
+# Full installation (embed + topics + import + pdf + office + draw)
 pip install -e ".[full]"
 ```
 
@@ -24,8 +24,11 @@ pip install -e ".[full]"
 |-------|-------------|
 | `embed` | Semantic search (sentence-transformers + FAISS) |
 | `topics` | BERTopic topic modeling |
+| `pdf` | PyMuPDF-based PDF fallback and long-PDF utilities |
 | `import` | Endnote / Zotero import |
-| `full` | All of the above |
+| `office` | DOCX / PPTX / XLSX ingest and inspection |
+| `draw` | Mermaid and Inkscape-powered diagram generation |
+| `full` | Core research workflow extras: embed + topics + import + pdf + office + draw |
 | `dev` | Development tools (pytest, ruff, mypy) |
 
 ## Setup Wizard

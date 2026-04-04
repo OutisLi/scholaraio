@@ -33,9 +33,11 @@ nav:
       - Configuration: getting-started/configuration.md
   - User Guide:
       - Search & Browse: guide/search.md
+      - Scientific Tool Onboarding: guide/toolref-onboarding.md
       - Ingestion: guide/ingestion.md
       - Writing: guide/writing.md
       - Webtools Integration: guide/webtools-integration.md
+  - API Reference: api/index.md
   - Contributing: contributing.md
   - Changelog: changelog.md
 

@@ -43,7 +43,7 @@ Skills 定义在 `.claude/skills/` 目录，遵循 [Agent Skills](https://agents
 
 把 skills 理解成“可复用工作流”就好：当用户意图明显对应某个能力时，优先去看相应 `SKILL.md`，按其中已经沉淀好的步骤执行，而不是每次从零设计流程。
 
-**现有 skills（26 个）：**
+**现有 skills：**
 
 知识库管理：
 - `search` — 当用户想找论文、查作者、做关键词/语义/融合检索，优先看这个 skill。
@@ -78,6 +78,15 @@ Skills 定义在 `.claude/skills/` 目录，遵循 [Agent Skills](https://agents
 系统运维：
 - `setup` — 当用户要安装、配置、诊断 ScholarAIO 环境时，优先看这个 skill。
 - `metrics` — 当用户要看 token 用量、调用耗时或运行指标时，用这个 skill。
+
+科学计算：
+- `scientific-runtime` — 当用户在 ScholarAIO 里处理科学计算 CLI 任务，需要优先走 `toolref`、安全 fallback，并把重点放在解决用户任务而不是维护文档时，用这个 skill。
+- `scientific-tool-onboarding` — 当用户要新增或升级某个科学计算工具支持，需要做官方文档入库、`toolref` 集成、轻量 skill 设计和端到端 CLI 验证时，用这个 skill。
+- `quantum-espresso` — 当任务涉及 Quantum ESPRESSO 输入变量、工作流或第一性原理计算决策时，用这个 skill。
+- `lammps` — 当任务涉及 LAMMPS 势函数、命令或经典材料模拟时，用这个 skill。
+- `gromacs` — 当任务涉及 GROMACS 体系搭建、平衡、分析或生物分子动力学工作流时，用这个 skill。
+- `openfoam` — 当任务涉及 OpenFOAM 求解器、字典、网格流程、湍流模型或 CFD case 配置时，用这个 skill。
+- `bioinformatics` — 当任务涉及 BLAST、minimap2、samtools、bcftools、MAFFT、IQ-TREE、ESMFold 等生物信息学工具链时，用这个 skill。
 
 **新增 skill 的流程：**
 
@@ -170,6 +179,7 @@ Skills 定义在 `.claude/skills/` 目录，遵循 [Agent Skills](https://agents
 | `cli.py` | 全量 CLI 入口 |
 | `setup.py` | 环境检测 + 安装向导 |
 | `metrics.py` | LLM token 用量 + API 计时 |
+| `insights.py` | 研究行为分析（热词、阅读趋势、语义近邻推荐、工作区活跃度） |
 | `translate.py` | 论文翻译（语言检测 + LLM 分块翻译 + 批量翻译） |
 | `migrate.py` | 数据迁移（扁平结构 → 按目录结构） |
 
@@ -181,7 +191,7 @@ CLI 命令一览：`scholaraio --help`
 - 富化/修复：`enrich-toc`、`enrich-l3`、`backfill-abstract`、`refetch`、`repair`
 - 数据维护：`attach-pdf`、`migrate-dirs`
 - 工作区：`ws`（init / add / remove / show / search / export 等子命令）
-- 引用与文档：`style`、`document`
+- 外部发现与科学运行时：`arxiv`、`toolref`、`insights`、`style`、`document`
 
 ## 架构
 

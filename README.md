@@ -11,7 +11,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-26-purple.svg)](.claude/skills/)
+[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-ScholarAIO-purple.svg)](.claude/skills/)
 
 </div>
 
@@ -119,6 +119,8 @@ Without one of those two options, running `scholaraio` from another project may 
 | **Multi-Format Export** | BibTeX, RIS, Markdown, DOCX | Export your library or workspace in any format — ready for Zotero, Endnote, manuscript submission, or sharing |
 | **Persistent Notes** | Cross-session memory | Agent analysis is saved per-paper (`notes.md`). Revisiting a paper reuses prior findings instead of re-reading the full text — saves tokens and avoids redundant work |
 | **Research Insights** | Reading behavior analytics | Search hot keywords, most-read papers, reading trends, and semantic neighbor recommendations for papers you haven't read yet |
+| **Federated Discovery** | Search across silos | Search your main library, explore silos, and arXiv in one command; pull arXiv PDFs directly into the ingest pipeline |
+| **Scientific Tool Docs** | Runtime guidance for computational tools | `toolref` ingests official docs for Quantum ESPRESSO, LAMMPS, GROMACS, OpenFOAM, and curated bioinformatics tools so agents can answer parameter and workflow questions precisely |
 | **Diagrams & Figures** | Publication-ready visuals | Mermaid (flowcharts, sequence diagrams, ER diagrams, Gantt charts, mind maps) and vector graphics via Inkscape — output PNG/SVG/PDF |
 | **Academic Writing** | AI-assisted drafting | Literature review, paper sections, citation check, rebuttal, gap analysis — every claim traceable to your own library |
 
@@ -201,6 +203,7 @@ Full config reference → [`config.yaml`](config.yaml)
 scholaraio search QUERY       Keyword search
 scholaraio vsearch QUERY      Semantic vector search
 scholaraio usearch QUERY      Unified search (keyword + semantic fusion)
+scholaraio fsearch QUERY      Federated search (main / explore / arXiv)
 scholaraio search-author NAME Search by author
 scholaraio top-cited          Rank by citation count
 scholaraio show PAPER         View paper content (L1-L4)
@@ -215,6 +218,7 @@ scholaraio enrich-toc         Extract table of contents
 scholaraio enrich-l3          Extract conclusions
 scholaraio backfill-abstract  Backfill missing abstracts
 scholaraio refetch            Re-fetch citation counts from APIs
+scholaraio translate PAPER    Translate markdown to a target language
 ```
 
 **Citation Graph**
@@ -236,10 +240,20 @@ scholaraio topics             BERTopic topic modeling
 scholaraio import-endnote     Import from Endnote
 scholaraio import-zotero      Import from Zotero
 scholaraio attach-pdf         Attach PDF to existing paper
+scholaraio arxiv search ...   Search arXiv preprints
+scholaraio arxiv fetch ID     Download arXiv PDF (optionally ingest)
 scholaraio export bibtex      Export BibTeX
 scholaraio ws init NAME       Create a workspace
 scholaraio ws add NAME PAPER  Add papers to workspace
 scholaraio ws search NAME Q   Search within workspace
+```
+
+**Scientific Runtime**
+```
+scholaraio toolref list       List indexed scientific tool docs
+scholaraio toolref show ...   Show exact parameter or command docs
+scholaraio toolref search ... Search scientific tool docs
+scholaraio document inspect   Inspect DOCX / PPTX / XLSX structure
 ```
 
 **Maintenance**
@@ -250,6 +264,7 @@ scholaraio rename             Standardize directory names
 scholaraio migrate-dirs       Migrate legacy directory structure
 scholaraio setup              Setup wizard
 scholaraio metrics            View LLM usage stats
+scholaraio insights [--days N] Reading behavior analytics
 ```
 
 </details>
@@ -261,7 +276,7 @@ scholaraio/          # Python package — CLI and all core modules
   ingest/            #   PDF parsing + metadata extraction pipeline
   sources/           #   Data source adapters (local / Endnote / Zotero)
 
-.claude/skills/      # 26 agent skills (AgentSkills.io format)
+.claude/skills/      # Agent skills (AgentSkills.io format)
 .agents/skills/      # ↑ symlink for cross-agent discovery
 data/papers/         # Your paper library (gitignored)
 data/inbox/          # Drop PDFs here for ingestion

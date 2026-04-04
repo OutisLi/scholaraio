@@ -5,12 +5,16 @@ Covers pure-function logic that doesn't require LLM calls.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from scholaraio.translate import (
+    SKIP_ALL_CHUNKS_FAILED,
     _build_translate_prompt,
     _split_into_chunks,
     detect_language,
+    translate_paper,
     validate_lang,
 )
 
@@ -177,3 +181,99 @@ class TestBuildTranslatePrompt:
     def test_prompt_contains_target_language(self):
         prompt = _build_translate_prompt("text", "de", "Deutsch")
         assert "Deutsch" in prompt
+
+
+class TestTranslatePaper:
+    def test_translate_paper_does_not_write_output_when_all_chunks_fail(self, tmp_path, monkeypatch):
+        paper_dir = tmp_path / "Smith-2023-Test"
+        paper_dir.mkdir(parents=True)
+        (paper_dir / "paper.md").write_text("This is an English paper.", encoding="utf-8")
+        (paper_dir / "meta.json").write_text("{}", encoding="utf-8")
+
+        cfg = SimpleNamespace(
+            translate=SimpleNamespace(target_lang="zh", chunk_size=1000, concurrency=1),
+            llm=SimpleNamespace(model="test-model"),
+        )
+
+        monkeypatch.setattr(
+            "scholaraio.translate._translate_chunk",
+            lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("llm unavailable")),
+        )
+
+        result = translate_paper(paper_dir, cfg, target_lang="zh", force=True)
+
+        assert result.ok is False
+        assert result.skip_reason == SKIP_ALL_CHUNKS_FAILED
+        assert not (paper_dir / "paper_zh.md").exists()
+
+    def test_translate_paper_writes_incremental_output_and_resumes(self, tmp_path, monkeypatch):
+        paper_dir = tmp_path / "Smith-2023-Test"
+        paper_dir.mkdir(parents=True)
+        (paper_dir / "paper.md").write_text("Original text", encoding="utf-8")
+        (paper_dir / "meta.json").write_text("{}", encoding="utf-8")
+
+        cfg = SimpleNamespace(
+            translate=SimpleNamespace(target_lang="zh", chunk_size=1000, concurrency=1),
+            llm=SimpleNamespace(model="test-model"),
+        )
+        out_path = paper_dir / "paper_zh.md"
+        progress_path = paper_dir / ".paper_zh.progress.json"
+        progress_messages: list[str] = []
+
+        monkeypatch.setattr("scholaraio.translate.detect_language", lambda text: "en")
+        monkeypatch.setattr(
+            "scholaraio.translate._split_into_chunks", lambda text, chunk_size: ["chunk-1", "chunk-2", "chunk-3"]
+        )
+
+        first_run_calls: list[str] = []
+
+        def first_run_translate(chunk, lang, config):
+            first_run_calls.append(chunk)
+            if chunk == "chunk-1":
+                return "译文-1"
+            raise TimeoutError("chunk timeout")
+
+        monkeypatch.setattr("scholaraio.translate._translate_chunk", first_run_translate)
+
+        first = translate_paper(
+            paper_dir, cfg, target_lang="zh", force=True, progress_callback=progress_messages.append
+        )
+
+        assert first.ok is False
+        assert first.partial is True
+        assert first.path == out_path
+        assert first.completed_chunks == 1
+        assert first.total_chunks == 3
+        assert first_run_calls == ["chunk-1", "chunk-2"]
+        assert out_path.read_text(encoding="utf-8") == "译文-1"
+        assert progress_path.exists()
+        assert any("开始翻译，共 3 块" in msg for msg in progress_messages)
+        assert any("翻译进度: 1/3" in msg for msg in progress_messages)
+        assert any("翻译在第 2/3 块中断" in msg for msg in progress_messages)
+
+        second_run_calls: list[str] = []
+        resume_messages: list[str] = []
+
+        def second_run_translate(chunk, lang, config):
+            second_run_calls.append(chunk)
+            return {"chunk-2": "译文-2", "chunk-3": "译文-3"}[chunk]
+
+        monkeypatch.setattr("scholaraio.translate._translate_chunk", second_run_translate)
+
+        second = translate_paper(
+            paper_dir,
+            cfg,
+            target_lang="zh",
+            force=False,
+            progress_callback=resume_messages.append,
+        )
+
+        assert second.ok is True
+        assert second.partial is False
+        assert second.completed_chunks == 3
+        assert second.total_chunks == 3
+        assert second_run_calls == ["chunk-2", "chunk-3"]
+        assert out_path.read_text(encoding="utf-8") == "译文-1\n\n译文-2\n\n译文-3"
+        assert not progress_path.exists()
+        assert any("继续翻译：已完成 1/3 块" in msg for msg in resume_messages)
+        assert any("翻译完成: 3/3 块" in msg for msg in resume_messages)
