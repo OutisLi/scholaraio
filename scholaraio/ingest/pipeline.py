@@ -1170,11 +1170,6 @@ def _process_inbox(
                 if _ingest_proceedings_ctx(ctx, force=True):
                     result = StepResult.FAIL
                     break
-            if step_name == "extract" and not (is_thesis or is_patent or is_proceedings):
-                detected, _reason = _detect_proceedings(ctx)
-                if detected and _ingest_proceedings_ctx(ctx, force=False):
-                    result = StepResult.FAIL
-                    break
             if result != StepResult.OK:
                 break
 
@@ -2154,15 +2149,6 @@ def _detect_thesis(ctx: InboxCtx) -> bool:
         _log.debug("thesis detection LLM call failed: %s", e)
 
     return False
-
-
-def _detect_proceedings(ctx: InboxCtx, *, force: bool = False) -> tuple[bool, str]:
-    """Check whether the current markdown looks like a proceedings volume."""
-    from scholaraio.ingest.proceedings import detect_proceedings_from_md
-
-    if not ctx.md_path or not ctx.md_path.exists():
-        return False, ""
-    return detect_proceedings_from_md(ctx.md_path, force=force)
 
 
 def _ingest_proceedings_ctx(ctx: InboxCtx, *, force: bool) -> bool:

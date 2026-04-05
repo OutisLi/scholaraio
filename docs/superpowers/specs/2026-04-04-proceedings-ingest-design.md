@@ -13,7 +13,7 @@ The system should recognize that a very large PDF may be a proceedings volume ra
 ## Goals
 
 - Support a dedicated manual inbox for proceedings volumes.
-- Support automatic proceedings detection from the regular paper inbox.
+- Support proceedings ingest from the dedicated `data/inbox-proceedings/` inbox only.
 - Store proceedings data in a filesystem hierarchy separate from `data/papers/`.
 - Split a proceedings volume into per-paper records under its own collection directory.
 - Keep default `search`, `usearch`, and `vsearch` behavior unchanged.
@@ -213,7 +213,7 @@ V1 can prioritize keyword search first if needed, with semantic retrieval added 
 ### `ingest/pipeline.py`
 
 - Add proceedings inbox processing.
-- Add automatic routing from regular inbox to proceedings pipeline when detection fires.
+- Do not auto-route regular inbox items into proceedings; require explicit placement in `data/inbox-proceedings/`.
 - Keep thesis and proceedings detection independent and ordered clearly.
 
 ### `ingest/extractor.py`
@@ -253,7 +253,7 @@ Suggested additions:
 ### Detection tests
 
 - Manual proceedings inbox forces proceedings mode.
-- Regular inbox auto-detect routes qualifying PDFs to proceedings flow.
+- Regular inbox items stay on the normal paper flow unless the user explicitly places them in `data/inbox-proceedings/`.
 - Typical single papers do not get misclassified as proceedings.
 
 ### Storage tests
@@ -292,7 +292,7 @@ Recommended implementation order:
 ## Acceptance Criteria
 
 - A proceedings PDF can be ingested through a dedicated inbox.
-- A qualifying proceedings PDF in the regular inbox can be auto-routed to proceedings processing.
+- Proceedings processing starts only from the dedicated `data/inbox-proceedings/` inbox.
 - Extracted child papers are stored under `data/proceedings/`.
 - Default search commands do not return proceedings content.
 - Federated search can include proceedings content via explicit scope selection.

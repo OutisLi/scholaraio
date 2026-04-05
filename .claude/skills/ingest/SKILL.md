@@ -51,7 +51,7 @@ scholaraio pipeline <preset> [--dry-run] [--no-api] [--force] [--inspect]
    - `data/inbox-thesis/` — 学位论文（跳过 DOI 去重，自动标记 thesis）
    - `data/inbox-patent/` — 专利文献（按公开号去重，自动标记 patent，跳过 DOI 去重）
    - `data/inbox-doc/` — 非论文文档（技术报告、讲义、Word/Excel/PPT、标准文档等，跳过 DOI 去重，LLM 生成标题/摘要）
-   - `data/inbox-proceedings/` — 论文集（强制按 proceedings 处理；普通 `data/inbox/` 里也会做自动识别）
+   - `data/inbox-proceedings/` — 论文集（强制按 proceedings 处理；普通 `data/inbox/` 不再自动识别）
 
 4. 论文集（proceedings）采用半自动两阶段流程：
    - 第一阶段：`scholaraio pipeline ingest` 只负责把 PDF/MD 转成 `data/proceedings/<Volume>/proceeding.md`，并生成 `split_candidates.json`

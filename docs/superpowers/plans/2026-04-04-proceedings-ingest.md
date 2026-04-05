@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add proceedings-aware ingestion with a dedicated inbox, conservative auto-detection from the regular inbox, separate proceedings storage, and explicit `fsearch` support for a `proceedings` scope.
+**Goal:** Add proceedings-aware ingestion with a dedicated inbox, separate proceedings storage, and explicit `fsearch` support for a `proceedings` scope.
 
 **Architecture:** Extend the ingest pipeline with a new proceedings path parallel to thesis and document handling. Store proceedings volumes and child papers under `data/proceedings/`, keep them out of the main paper registry, and add opt-in federated retrieval through `fsearch`. Start with keyword search support for proceedings and conservative heuristic segmentation so the first release closes the workflow without destabilizing existing paper ingest.
 
@@ -120,7 +120,7 @@ git -C /home/lzmo/repos/personal/scholaraio-issue-46 commit -m "Add proceedings 
 Add tests for:
 
 - manual proceedings inbox forces proceedings mode
-- regular inbox markdown with proceedings cues is classified as proceedings
+- regular inbox markdown stays on the normal paper flow even if it contains proceedings-like cues
 - ordinary single-paper markdown is not classified as proceedings
 
 Use compact fixtures that include patterns like `Proceedings of`, repeated DOI/title blocks, and TOC-like headings.
@@ -200,7 +200,7 @@ git -C /home/lzmo/repos/personal/scholaraio-issue-46 add scholaraio/ingest/proce
 git -C /home/lzmo/repos/personal/scholaraio-issue-46 commit -m "Add proceedings ingest pipeline"
 ```
 
-## Task 5: Process dedicated proceedings inbox and auto-route from main inbox
+## Task 5: Process dedicated proceedings inbox only
 
 **Files:**
 - Modify: `scholaraio/ingest/pipeline.py`
@@ -225,7 +225,7 @@ Extend the inbox phase in `scholaraio/ingest/pipeline.py`:
 
 - scan `data/inbox-proceedings/`
 - process it with proceedings-specific steps
-- add conservative auto-routing for regular inbox entries that detect as proceedings
+- do not auto-route regular inbox entries into proceedings
 - keep thesis/document inbox ordering explicit and unchanged for existing behavior
 
 - [ ] **Step 4: Run test to verify it passes**
