@@ -176,10 +176,12 @@ Main config: `config.yaml` (tracked). Secrets: `config.local.yaml` (gitignored).
 
 | Key | Purpose | Get it |
 |-----|---------|--------|
-| LLM API key | Metadata extraction, enrichment, academic discussion | Set `llm.api_key` in `config.local.yaml`, or use env vars: `SCHOLARAIO_LLM_API_KEY` (universal), `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` / `GEMINI_API_KEY`. Default backend: [DeepSeek](https://platform.deepseek.com/); also supports Claude, Gemini, Ollama, and any OpenAI-compatible API |
+| LLM API key | Metadata extraction, enrichment, academic discussion | Set `llm.api_key` in `config.local.yaml`, or use env vars: `SCHOLARAIO_LLM_API_KEY` (universal), `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` / `GEMINI_API_KEY`. Default backend: [DeepSeek](https://platform.deepseek.com/); also supports Claude, Gemini, Ollama, and any OpenAI-compatible API. This is usually billed separately by the provider; do not assume an agent subscription automatically covers ScholarAIO API calls |
 | `MINERU_TOKEN` / `MINERU_API_KEY` | MinerU cloud PDF parsing via `mineru-open-api` | Free at [mineru.net](https://mineru.net/apiManage/token); install CLI with `pip install mineru-open-api`, or [self-host](https://github.com/opendatalab/MinerU) |
 
 > **Both are optional.** Without LLM: regex-only extraction. Without MinerU token / local service: ScholarAIO can still fall back to Docling or PyMuPDF for PDF parsing, or you can place `.md` files in `data/inbox/` directly.
+
+`scholaraio setup check` also reports optional advanced items such as Semantic Scholar and Zotero API keys. These are not part of the minimal setup; configure them only if you need citation refresh throughput or Zotero Web API import.
 
 Embedding model (Qwen3-Embedding-0.6B, ~1.2 GB) auto-downloads on first use. Default source: ModelScope (no proxy needed in China). International users: set `embed.source: huggingface` in config.
 You can also override embedding source/model cache via environment variables: `SCHOLARAIO_EMBED_SOURCE`, `SCHOLARAIO_EMBED_CACHE_DIR`, `SCHOLARAIO_EMBED_MODEL`, and optional mirror `SCHOLARAIO_HF_ENDPOINT` (fallback to `HF_ENDPOINT`).

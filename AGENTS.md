@@ -464,8 +464,10 @@ The exact invocation form of skills depends on the host agent or plugin system; 
 
 ### API Key Notes
 
-- **LLM key** (DeepSeek / OpenAI): required for metadata extraction and content enrichment. Without it, the system degrades to pure regex mode and enrich features are unavailable
-- **MinerU token**: used by `mineru-open-api extract` for MinerU cloud PDF-to-Markdown conversion. `MINERU_TOKEN` is preferred; `MINERU_API_KEY` remains a compatibility alias. Without it, ScholarAIO can still fall back to Docling / PyMuPDF, or ingest manually placed `.md` files
+- **LLM key** (DeepSeek / OpenAI / Anthropic / Google): required for metadata extraction and content enrichment. Without it, the system degrades to pure regex mode and enrich features are unavailable. This is usually billed separately by the chosen provider; do not assume an agent subscription automatically covers ScholarAIO API calls
+- **MinerU token**: used by `mineru-open-api extract` for MinerU cloud PDF-to-Markdown conversion. `MINERU_TOKEN` is preferred; `MINERU_API_KEY` remains a compatibility alias. Without it, ScholarAIO can still fall back to Docling / PyMuPDF, or ingest manually placed `.md` files. MinerU token application is currently free
+- **Semantic Scholar API key**: optional; useful when the user needs higher throughput for citation refresh / refetch workflows
+- **Zotero API key**: optional; only needed for the Zotero Web API import path (local `zotero.sqlite` import does not require it)
 - The embedding model (Qwen3-Embedding-0.6B, ~1.2GB) downloads automatically on the first `embed` / `vsearch`. For overseas users, change `embed.source` to `huggingface` in `config.yaml`
 
 ## Key Conventions

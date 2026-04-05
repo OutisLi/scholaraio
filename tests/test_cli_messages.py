@@ -31,6 +31,17 @@ class TestSetupImportHints:
         assert "scholaraio import-zotero --local /path/to/zotero.sqlite\n" in zh_hint
 
 
+class TestSetupPromptTransparency:
+    def test_setup_prompts_explain_paid_vs_free_items(self):
+        zh_llm = _S["llm_key_prompt"]["zh"]
+        zh_mineru = _S["mineru_key_prompt"]["zh"]
+        zh_email = _S["email_prompt"]["zh"]
+
+        assert "单独计费" in zh_llm
+        assert "免费" in zh_mineru
+        assert "免费" in zh_email
+
+
 class TestCliHelpLocalization:
     def test_setup_help_is_fully_localized(self):
         parser = cli._build_parser()

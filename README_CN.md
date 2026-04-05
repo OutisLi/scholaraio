@@ -178,10 +178,12 @@ PDF → MinerU → 结构化 Markdown（图表 + LaTeX 公式保留）
 
 | Key | 用途 | 获取方式 |
 |-----|------|---------|
-| LLM API key | 元数据提取、内容富化、学术讨论 | 在 `config.local.yaml` 中设置 `llm.api_key`，或使用环境变量：`SCHOLARAIO_LLM_API_KEY`（通用）、`DEEPSEEK_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`GOOGLE_API_KEY` / `GEMINI_API_KEY`。默认后端：[DeepSeek](https://platform.deepseek.com/)；同时支持 Claude、Gemini、Ollama 及任意 OpenAI 兼容 API |
+| LLM API key | 元数据提取、内容富化、学术讨论 | 在 `config.local.yaml` 中设置 `llm.api_key`，或使用环境变量：`SCHOLARAIO_LLM_API_KEY`（通用）、`DEEPSEEK_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`GOOGLE_API_KEY` / `GEMINI_API_KEY`。默认后端：[DeepSeek](https://platform.deepseek.com/)；同时支持 Claude、Gemini、Ollama 及任意 OpenAI 兼容 API。通常需要由所选提供商单独计费；不要默认认为 agent 订阅会自动覆盖 ScholarAIO 的 API 调用 |
 | `MINERU_TOKEN` / `MINERU_API_KEY` | 通过 `mineru-open-api` 走 MinerU 云端 PDF 解析 | [mineru.net](https://mineru.net/apiManage/token) 免费申请，CLI 安装：`pip install mineru-open-api`，也可[本地部署](https://github.com/opendatalab/MinerU) |
 
 > **均为可选。** 没有 LLM key：降级为纯正则提取。没有 MinerU token / 本地能力时，ScholarAIO 仍可回退到 Docling 或 PyMuPDF 解析 PDF；也可以直接将 `.md` 放入 `data/inbox/`。
+
+`scholaraio setup check` 还会报告一些可选的高级配置项，例如 Semantic Scholar API key 和 Zotero API key。它们不属于最小起步配置，只在你需要更高 citation 刷新吞吐或 Zotero Web API 导入时才值得配置。
 
 嵌入模型（Qwen3-Embedding-0.6B，约 1.2 GB）首次使用时自动下载。默认从 ModelScope 下载（国内无需代理），海外用户设置 `embed.source: huggingface`。
 

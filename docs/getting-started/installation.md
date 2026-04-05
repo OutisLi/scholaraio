@@ -45,6 +45,21 @@ Or check what's already configured:
 scholaraio setup check
 ```
 
+`setup check` is the most complete initial diagnostic surface. It covers:
+
+- core setup items: dependency groups, `config.yaml`, LLM key, MinerU / Docling availability, parser recommendation, `contact_email`, and directory state
+- optional advanced items: Semantic Scholar API key and Zotero API key
+
+Current setup guidance prefers **MinerU first** whenever a MinerU path is available (local service or `mineru-open-api` + token). `Docling` remains the fallback when MinerU is not usable or when the user explicitly prefers it.
+
+Cost transparency:
+
+- `LLM API key`: usually billed separately by the chosen provider
+- `MINERU_TOKEN`: free to apply
+- `contact_email`: free
+- `Semantic Scholar API key`: optional; most endpoints work anonymously, but some require a key
+- `Zotero API key`: optional; ScholarAIO's current Web API import path expects it, while local `zotero.sqlite` import does not
+
 ## Agent Setup
 
 If you want to know which path to use for Claude Code, Codex, OpenClaw, Cursor, or other agents, see:

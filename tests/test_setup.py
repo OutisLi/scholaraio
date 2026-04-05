@@ -141,6 +141,26 @@ def test_run_check_includes_pdf_office_and_draw_dependency_groups(monkeypatch):
     assert "绘图依赖" in labels
 
 
+def test_run_check_includes_optional_api_configuration_statuses(monkeypatch):
+    cfg = Config()
+    monkeypatch.setattr("scholaraio.setup._check_mineru", lambda *_: (True, "mineru ok"))
+    monkeypatch.setattr("scholaraio.setup._check_docling", lambda *_: (True, "docling ok"))
+    monkeypatch.setattr("scholaraio.setup._check_huggingface", lambda *_: (True, "hf ok"))
+    monkeypatch.setattr("scholaraio.setup.recommend_pdf_parser", lambda *args: ("MinerU", "both reachable"))
+    monkeypatch.setattr(cfg, "resolved_s2_api_key", lambda: "")
+    monkeypatch.setattr(cfg, "resolved_zotero_api_key", lambda: "")
+
+    results = run_check(cfg, "zh")
+
+    result_map = {item.label: item for item in results}
+    assert "Semantic Scholar API key" in result_map
+    assert "Zotero API key" in result_map
+    assert result_map["Semantic Scholar API key"].ok is True
+    assert result_map["Zotero API key"].ok is True
+    assert "可选" in result_map["Semantic Scholar API key"].detail
+    assert "可选" in result_map["Zotero API key"].detail
+
+
 def test_check_dep_group_supports_draw_extra(monkeypatch):
     original = importlib.import_module
 
@@ -382,3 +402,18 @@ def test_wizard_keys_handles_null_llm_section(tmp_path, monkeypatch):
 
     local_cfg = (tmp_path / "config.local.yaml").read_text(encoding="utf-8")
     assert "api_key: test-key" in local_cfg
+
+
+def test_wizard_keys_reports_existing_config_when_nothing_new_is_added(tmp_path, monkeypatch, capsys):
+    (tmp_path / "config.local.yaml").write_text(
+        "llm:\n  api_key: existing-llm-key\ningest:\n  mineru_api_key: existing-mineru-key\n  pdf_preferred_parser: mineru\n",
+        encoding="utf-8",
+    )
+    answers = iter(["", "", ""])
+    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: next(answers))
+
+    _wizard_keys(tmp_path, "zh", ParserChoice(parser="mineru", needs_mineru_key=True))
+
+    out = capsys.readouterr().out
+    assert "未新增任何配置" in out
+    assert "保留现有 config.local.yaml" in out

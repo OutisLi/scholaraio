@@ -46,8 +46,26 @@ _S: dict[str, dict[Lang, str]] = {
     "huggingface": {"en": "Hugging Face", "zh": "Hugging Face"},
     "parser_recommendation": {"en": "PDF parser recommendation", "zh": "PDF 解析器推荐"},
     "contact_email": {"en": "Contact email", "zh": "联系邮箱"},
+    "s2_key": {"en": "Semantic Scholar API key", "zh": "Semantic Scholar API key"},
+    "zotero_key": {"en": "Zotero API key", "zh": "Zotero API key"},
     "directories": {"en": "Directories", "zh": "目录结构"},
     "papers_count": {"en": "Papers", "zh": "论文数量"},
+    "optional_s2_set": {
+        "en": "configured ({masked}) | optional: authenticated Semantic Scholar access; some endpoints require a key",
+        "zh": "已配置 ({masked}) | 可选：用于 Semantic Scholar 认证访问；部分端点需要 key",
+    },
+    "optional_s2_unset": {
+        "en": "not set | optional: most endpoints still work anonymously, but some Semantic Scholar endpoints require a key",
+        "zh": "未设置 | 可选：多数端点仍可匿名访问，但部分 Semantic Scholar 端点需要 key",
+    },
+    "optional_zotero_set": {
+        "en": "configured ({masked}) | optional: used by Zotero Web API import",
+        "zh": "已配置 ({masked}) | 可选：用于 Zotero Web API 导入",
+    },
+    "optional_zotero_unset": {
+        "en": "not set | optional: our Zotero Web API path needs it; local zotero.sqlite import does not",
+        "zh": "未设置 | 可选：我们当前的 Zotero Web API 路径需要它；本地 zotero.sqlite 导入不需要",
+    },
     # -- check status --
     "installed": {"en": "installed", "zh": "已安装"},
     "not_installed": {"en": "not installed", "zh": "未安装"},
@@ -96,9 +114,11 @@ _S: dict[str, dict[Lang, str]] = {
     },
     "llm_key_prompt": {
         "en": "  LLM API key (DeepSeek / OpenAI / Anthropic / Google).\n"
+        "  This is usually billed separately by your provider; do not assume an agent subscription covers it.\n"
         "  Without it: metadata extraction degrades to regex-only, enrich unavailable.\n"
         "  Press Enter to skip.",
         "zh": "  LLM API key（DeepSeek / OpenAI / Anthropic / Google）。\n"
+        "  这通常需要由所选提供商单独计费；不要默认认为 agent 订阅会自动覆盖它。\n"
         "  不配置：元数据提取降级为纯正则，enrich 不可用。\n"
         "  按 Enter 跳过。",
     },
@@ -199,13 +219,17 @@ _S: dict[str, dict[Lang, str]] = {
         "    6. 如果 Hugging Face 不通，官方文档建议切换到 ModelScope 模型源",
     },
     "email_prompt": {
-        "en": "  Contact email (for Crossref polite pool — faster API responses).\n  Press Enter to skip.",
-        "zh": "  联系邮箱（Crossref polite pool，配置后 API 更快）。\n  按 Enter 跳过。",
+        "en": "  Contact email (free; used for the Crossref polite pool so API responses are faster).\n  Press Enter to skip.",
+        "zh": "  联系邮箱（免费；用于 Crossref polite pool，配置后 API 更快）。\n  按 Enter 跳过。",
     },
     "key_saved": {"en": "  Saved to config.local.yaml.", "zh": "  已保存到 config.local.yaml。"},
     "no_keys": {
         "en": "  No keys configured. You can add them later in config.local.yaml.",
         "zh": "  未配置任何密钥。你可以稍后在 config.local.yaml 中添加。",
+    },
+    "config_unchanged": {
+        "en": "  Added no new settings; keeping the existing config.local.yaml.",
+        "zh": "  未新增任何配置；保留现有 config.local.yaml。",
     },
     "import_hint": {
         "en": "\nTip: To import papers from Zotero or Endnote, use:\n"
@@ -411,6 +435,44 @@ def run_check(cfg: Config | None = None, lang: Lang = "zh") -> list[CheckResult]
         results.append(CheckResult(t("contact_email", lang), True, email))
     else:
         results.append(CheckResult(t("contact_email", lang), False, t("not_set", lang)))
+
+    s2_key = cfg.resolved_s2_api_key()
+    if s2_key:
+        masked = s2_key[:3] + "***" + s2_key[-3:] if len(s2_key) > 8 else "***"
+        results.append(
+            CheckResult(
+                t("s2_key", lang),
+                True,
+                t("optional_s2_set", lang).format(masked=masked),
+            )
+        )
+    else:
+        results.append(
+            CheckResult(
+                t("s2_key", lang),
+                True,
+                t("optional_s2_unset", lang),
+            )
+        )
+
+    zotero_key = cfg.resolved_zotero_api_key()
+    if zotero_key:
+        masked = zotero_key[:3] + "***" + zotero_key[-3:] if len(zotero_key) > 8 else "***"
+        results.append(
+            CheckResult(
+                t("zotero_key", lang),
+                True,
+                t("optional_zotero_set", lang).format(masked=masked),
+            )
+        )
+    else:
+        results.append(
+            CheckResult(
+                t("zotero_key", lang),
+                True,
+                t("optional_zotero_unset", lang),
+            )
+        )
 
     # Directories
     dirs_to_check = [
@@ -787,7 +849,10 @@ def _wizard_keys(root: Path, lang: Lang, parser_choice: ParserChoice | None = No
         )
         print(t("key_saved", lang))
     else:
-        print(t("no_keys", lang))
+        if local_path.exists():
+            print(t("config_unchanged", lang))
+        else:
+            print(t("no_keys", lang))
 
 
 # ============================================================================

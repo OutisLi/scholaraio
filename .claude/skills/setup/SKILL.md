@@ -23,6 +23,26 @@ scholaraio setup check --lang zh
 - 只有在会影响后续决策时，才回头问用户一个关键问题
 - 对失败项要用“现状 + 原因 + 建议动作”的方式转述，不要只说“没装”或“不可达”
 
+## 1.5 核心配置 vs 附加配置
+
+默认把 setup 分成两层：
+
+- **核心配置**：依赖、`config.yaml`、LLM key、PDF 解析器选择、MinerU token、`contact_email`
+- **附加配置**：`Semantic Scholar API key`、`Zotero API key`、非默认 LLM backend / base_url 等按需项目
+
+执行顺序要求：
+
+1. 先完成核心配置
+2. 再明确告诉用户“还有一些附加配置，可提升特定能力，要不要继续配置”
+3. 只有用户表示需要相关能力时，才继续展开附加配置
+
+对每个附加项，agent 必须按同一模板说明：
+
+- **用途**：它解决什么问题
+- **何时需要**：哪些用户才值得配
+- **做法**：写到哪里、命令或字段是什么
+- **开销**：免费 / 通常单独计费 / 取决于第三方政策
+
 ## 2. 根据缺失项引导用户
 
 ### 依赖缺失
@@ -38,17 +58,43 @@ scholaraio setup check --lang zh
 - 或者直接帮用户创建（默认配置即可）
 
 ### API key 未配置
-- **LLM key**（DeepSeek / OpenAI）：问用户是否有。没有也能用，但元数据提取降级为纯正则、enrich 不可用
+- **LLM key**（DeepSeek / OpenAI / Anthropic / Google）：问用户是否有。没有也能用，但元数据提取降级为纯正则、enrich 不可用。要明确说明：**这通常由所选提供商单独计费，不要默认认为 coding agent 订阅会自动覆盖 ScholarAIO 的 API 调用**
 - **PDF 解析器选择**：先问用户想用 `MinerU` 还是 `Docling`
 - 如果用户已经明确知道要用哪个解析器，**不要替用户改主意**，直接按用户选择继续配置
 - 如果用户不知道选哪个：
-  - 测试 `MinerU` 官方入口和 `https://huggingface.co` 是否可达
-  - 若只有一个可达，就建议优先对应方案
-  - 若两者都可达，默认建议优先 `MinerU`
-  - 若两者都不可达，优先建议 `Docling` 本地部署
+  - 测试本地 `MinerU` 服务、`mineru-open-api`、MinerU token 状态，以及 `https://huggingface.co` 可达性
+  - **只要 MinerU 路径可走，就默认优先推荐 `MinerU`**
+  - 仅当 MinerU 本地服务不可达、CLI/token 也不可用时，才改为优先建议 `Docling`
   - 推荐时要明确说明：这是建议，不是替用户做决定；如果用户已有偏好，以用户选择为准
+  - **必须把检测结果原样转述给用户**，至少包括：
+    - 本地 MinerU 服务是否可达
+    - `mineru-open-api` 是否存在
+    - 是否检测到现有 MinerU token
+    - Hugging Face 是否可达
 - **MinerU token**：仅在用户选择 `MinerU` 云端方案时提示。要明确说明：`MinerU token 是免费的，只需要注册并申请`；优先使用 `MINERU_TOKEN`，`MINERU_API_KEY` 只保留兼容
+- **Contact email**：免费；用于 Crossref polite pool，加快 API 响应，可选但推荐
 - 将密钥写入 `config.local.yaml`（不进 git）
+
+### 附加配置如何问
+
+完成核心配置后，再问一次：
+
+- `Semantic Scholar API key`
+  - 用途：用于 Semantic Scholar 认证访问；官方说明是“大多数端点可匿名访问，但部分端点需要 key”
+  - 何时需要：用户会频繁做 citation/refetch，或后续需要依赖认证端点时
+  - 做法：写入 `ingest.s2_api_key` 或环境变量 `S2_API_KEY`
+  - 开销：**按第三方政策**；不要擅自承诺免费或收费
+- `Zotero API key`
+  - 用途：走 Zotero Web API 导入
+  - 何时需要：用户明确要用 `import-zotero` 的 Web API 路径，而不是本地 `zotero.sqlite`
+  - 补充说明：Zotero 官方允许对**公开库**做匿名只读访问，但 ScholarAIO 当前的 Web API 导入路径按“提供 key”设计；如果用户不想配 key，优先建议本地 `zotero.sqlite` 导入
+  - 做法：写入 `zotero.api_key` 或环境变量 `ZOTERO_API_KEY`
+  - 开销：**按第三方政策**
+- 自定义 LLM backend / model / base_url
+  - 用途：切换到 Claude / Gemini / Ollama / 自建 OpenAI-compatible 服务
+  - 何时需要：用户明确不想用默认 DeepSeek，或已有自己的兼容后端
+  - 做法：修改 `config.yaml` 的 `llm.backend / model / base_url`
+  - 开销：**取决于所选提供商**
 
 ### MinerU 高级字段约束
 - 对用户暴露时，默认坚持“能不改就不改”，优先开箱即用
@@ -102,6 +148,23 @@ scholaraio setup check --lang zh
   - `curl -I --max-time 10 http://localhost:8000`
   - `curl -I --max-time 10 https://mineru.net/apiManage/token`
   - `curl -I --max-time 10 https://huggingface.co`
+
+### 成本透明要求
+
+setup 过程中，agent 不要只说“需要 key”，必须同时说明：
+
+- `LLM API key`：通常单独计费；不配则降级
+- `MinerU token`：免费申请；不配仍可走本地 MinerU / Docling / PyMuPDF
+- `contact_email`：免费
+- 其他附加 API key：明确说“按第三方政策”，不要替对方做费用承诺
+
+简短答法模板：
+
+- `LLM API key`：用于元数据提取和内容富化；不配会降级为纯正则，通常单独计费
+- `MinerU token`：用于 MinerU 云端解析；免费，不配仍可走本地 MinerU / Docling / PyMuPDF
+- `contact_email`：用于 Crossref polite pool；免费，不配通常只是请求识别度和服务礼貌性更弱
+- `Semantic Scholar API key`：用于认证访问；不配多数端点仍可用，但部分端点需要 key
+- `Zotero API key`：用于当前的 Zotero Web API 导入路径；不配就改走本地 `zotero.sqlite`
 
 ### 目录不存在
 - 运行 `scholaraio setup check` 后如果目录缺失，运行任意 scholaraio 命令会自动创建（`ensure_dirs()`）
