@@ -355,6 +355,51 @@ def test_batch_convert_pdfs_cloud_batch_moves_markdown_relative_images(tmp_path,
     assert (paper_dir / "images" / "fig.png").exists()
 
 
+def test_batch_convert_pdfs_cloud_batch_does_not_skip_duplicate_source_stems(tmp_path, monkeypatch):
+    paper_a = tmp_path / "papers" / "Alpha-2023-Test"
+    paper_b = tmp_path / "papers" / "Beta-2023-Test"
+    paper_a.mkdir(parents=True)
+    paper_b.mkdir(parents=True)
+    (paper_a / "meta.json").write_text("{}", encoding="utf-8")
+    (paper_b / "meta.json").write_text("{}", encoding="utf-8")
+    pdf_a = paper_a / "source.pdf"
+    pdf_b = paper_b / "source.pdf"
+    pdf_a.write_bytes(b"%PDF-1.4\n")
+    pdf_b.write_bytes(b"%PDF-1.4\n")
+    md_a = tmp_path / "batch-out-a" / "source.md"
+    md_b = tmp_path / "batch-out-b" / "source.md"
+    md_a.parent.mkdir(parents=True)
+    md_b.parent.mkdir(parents=True)
+    md_a.write_text("alpha\n", encoding="utf-8")
+    md_b.write_text("beta\n", encoding="utf-8")
+
+    cfg = Config()
+    cfg._root = tmp_path
+    cfg.paths.papers_dir = "papers"
+    monkeypatch.setattr(cfg, "resolved_mineru_api_key", lambda: "token")
+
+    import scholaraio.ingest.mineru as mineru
+    import scholaraio.ingest.pipeline as pipeline
+
+    monkeypatch.setattr(mineru, "check_server", lambda *_: False)
+    monkeypatch.setattr(pipeline, "_batch_postprocess", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(mineru, "_plan_cloud_chunking", lambda *_args, **_kwargs: (False, 600, ""))
+    monkeypatch.setattr(
+        mineru,
+        "convert_pdfs_cloud_batch",
+        lambda *_args, **_kwargs: [
+            ConvertResult(pdf_path=pdf_a, md_path=md_a, success=True),
+            ConvertResult(pdf_path=pdf_b, md_path=md_b, success=True),
+        ],
+    )
+
+    stats = batch_convert_pdfs(cfg, enrich=False)
+
+    assert stats == {"converted": 2, "failed": 0, "skipped": 0}
+    assert (paper_a / "paper.md").read_text(encoding="utf-8") == "alpha\n"
+    assert (paper_b / "paper.md").read_text(encoding="utf-8") == "beta\n"
+
+
 def test_process_inbox_cloud_batch_preserves_nested_markdown_result(tmp_path, monkeypatch):
     inbox_dir = tmp_path / "inbox"
     inbox_dir.mkdir()

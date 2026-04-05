@@ -675,6 +675,123 @@ class TestAttachPdfFallback:
 
         assert captured["poll_timeout"] == 321
 
+    def test_attach_pdf_cloud_moves_nested_markdown_images(self, tmp_path, monkeypatch):
+        paper_dir = tmp_path / "papers" / "Smith-2023-Test"
+        paper_dir.mkdir(parents=True)
+        (paper_dir / "meta.json").write_text("{}", encoding="utf-8")
+        src_pdf = tmp_path / "input.pdf"
+        src_pdf.write_bytes(b"%PDF-1.4\n")
+
+        cfg = SimpleNamespace(
+            ingest=SimpleNamespace(
+                mineru_endpoint="http://localhost:8000",
+                mineru_cloud_url="https://mineru.net/api/v4",
+                mineru_backend_local="pipeline",
+                mineru_model_version_cloud="pipeline",
+                mineru_lang="en",
+                mineru_parse_method="auto",
+                mineru_enable_formula=True,
+                mineru_enable_table=True,
+                mineru_poll_timeout=900,
+                chunk_page_limit=100,
+                pdf_fallback_order=["auto"],
+                pdf_fallback_auto_detect=True,
+            ),
+            papers_dir=tmp_path / "papers",
+        )
+        cfg.resolved_mineru_api_key = lambda: "token"
+
+        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+
+        import scholaraio.ingest.mineru as mineru
+
+        nested_dir = paper_dir / "flowchart"
+        nested_dir.mkdir()
+        nested_md = nested_dir / "index.md"
+        nested_md.write_text("![img](images/fig.png)\n", encoding="utf-8")
+        (nested_dir / "images").mkdir()
+        (nested_dir / "images" / "fig.png").write_bytes(b"png")
+
+        monkeypatch.setattr(mineru, "check_server", lambda *_: False)
+        monkeypatch.setattr(mineru, "_plan_cloud_chunking", lambda *_args, **_kwargs: (False, 600, ""))
+        monkeypatch.setattr(
+            mineru,
+            "convert_pdf_cloud",
+            lambda pdf_path, *_args, **_kwargs: ConvertResult(
+                pdf_path=pdf_path,
+                md_path=nested_md,
+                success=True,
+            ),
+        )
+        monkeypatch.setattr("scholaraio.papers.read_meta", lambda *_: {"abstract": "exists"})
+        monkeypatch.setattr("scholaraio.ingest.pipeline.step_embed", lambda *_: None)
+        monkeypatch.setattr("scholaraio.ingest.pipeline.step_index", lambda *_: None)
+
+        args = Namespace(paper_id="paper-1", pdf_path=str(src_pdf), dry_run=False)
+        cli.cmd_attach_pdf(args, cfg)
+
+        assert (paper_dir / "paper.md").read_text(encoding="utf-8") == "![img](images/fig.png)\n"
+        assert (paper_dir / "images" / "fig.png").exists()
+        assert not nested_dir.exists()
+
+    def test_attach_pdf_cloud_keeps_flat_images_without_self_move(self, tmp_path, monkeypatch):
+        paper_dir = tmp_path / "papers" / "Smith-2023-Test"
+        paper_dir.mkdir(parents=True)
+        (paper_dir / "meta.json").write_text("{}", encoding="utf-8")
+        src_pdf = tmp_path / "input.pdf"
+        src_pdf.write_bytes(b"%PDF-1.4\n")
+
+        cfg = SimpleNamespace(
+            ingest=SimpleNamespace(
+                mineru_endpoint="http://localhost:8000",
+                mineru_cloud_url="https://mineru.net/api/v4",
+                mineru_backend_local="pipeline",
+                mineru_model_version_cloud="pipeline",
+                mineru_lang="en",
+                mineru_parse_method="auto",
+                mineru_enable_formula=True,
+                mineru_enable_table=True,
+                mineru_poll_timeout=900,
+                chunk_page_limit=100,
+                pdf_fallback_order=["auto"],
+                pdf_fallback_auto_detect=True,
+            ),
+            papers_dir=tmp_path / "papers",
+        )
+        cfg.resolved_mineru_api_key = lambda: "token"
+
+        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+
+        import scholaraio.ingest.mineru as mineru
+
+        flat_md = paper_dir / "flowchart.md"
+        flat_md.write_text("![img](images/fig.png)\n", encoding="utf-8")
+        (paper_dir / "images").mkdir()
+        (paper_dir / "images" / "fig.png").write_bytes(b"png")
+
+        monkeypatch.setattr(mineru, "check_server", lambda *_: False)
+        monkeypatch.setattr(mineru, "_plan_cloud_chunking", lambda *_args, **_kwargs: (False, 600, ""))
+        monkeypatch.setattr(
+            mineru,
+            "convert_pdf_cloud",
+            lambda pdf_path, *_args, **_kwargs: ConvertResult(
+                pdf_path=pdf_path,
+                md_path=flat_md,
+                success=True,
+            ),
+        )
+        monkeypatch.setattr("scholaraio.papers.read_meta", lambda *_: {"abstract": "exists"})
+        monkeypatch.setattr("scholaraio.ingest.pipeline.step_embed", lambda *_: None)
+        monkeypatch.setattr("scholaraio.ingest.pipeline.step_index", lambda *_: None)
+
+        args = Namespace(paper_id="paper-1", pdf_path=str(src_pdf), dry_run=False)
+        cli.cmd_attach_pdf(args, cfg)
+
+        assert (paper_dir / "paper.md").read_text(encoding="utf-8") == "![img](images/fig.png)\n"
+        assert (paper_dir / "images" / "fig.png").exists()
+
     def test_attach_pdf_cloud_splits_when_new_limits_require_it(self, tmp_path, monkeypatch):
         paper_dir = tmp_path / "papers" / "Smith-2023-Test"
         paper_dir.mkdir(parents=True)

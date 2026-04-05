@@ -1726,18 +1726,12 @@ def batch_convert_pdfs(
             convert_pdfs_cloud_batch,
         )
 
-        # Collect PDF paths; detect stem collisions (batch API uses stem as data_id)
+        # Collect PDF paths for cloud batch conversion.
         pdf_paths: list[Path] = []
-        dir_map: dict[str, Path] = {}
+        dir_map: dict[Path, Path] = {}
         chunked_items: list[tuple[Path, Path, int, str]] = []
         default_chunk_size = getattr(cfg.ingest, "chunk_page_limit", 100)
         for pdir, pdf in to_convert:
-            if pdf.stem in dir_map:
-                _log.warning(
-                    "PDF stem collision: %s in %s and %s, skipping latter", pdf.stem, dir_map[pdf.stem].name, pdir.name
-                )
-                stats["skipped"] += 1
-                continue
             should_chunk, chunk_size, reason = _plan_cloud_chunking(
                 pdf,
                 default_chunk_size=default_chunk_size,
@@ -1745,7 +1739,7 @@ def batch_convert_pdfs(
             if should_chunk:
                 chunked_items.append((pdir, pdf, chunk_size, reason))
                 continue
-            dir_map[pdf.stem] = pdir
+            dir_map[pdf] = pdir
             pdf_paths.append(pdf)
 
         if pdf_paths:
@@ -1774,10 +1768,9 @@ def batch_convert_pdfs(
                 )
 
                 for br in batch_results:
-                    stem = br.pdf_path.stem
-                    pdir = dir_map.get(stem)
+                    pdir = dir_map.get(br.pdf_path)
                     if pdir is None:
-                        _log.error("batch result stem %s not in dir_map", stem)
+                        _log.error("batch result pdf %s not in dir_map", br.pdf_path)
                         stats["failed"] += 1
                         continue
 
@@ -1795,7 +1788,7 @@ def batch_convert_pdfs(
                     # Move .md to paper_dir/paper.md
                     paper_md = pdir / "paper.md"
                     shutil.move(str(md_src), str(paper_md))
-                    _move_batch_images(paper_md, pdir, stem, md_src, tmp_dir)
+                    _move_batch_images(paper_md, pdir, br.pdf_path.stem, md_src, tmp_dir)
 
                     # Clean up source PDF (keep only markdown)
                     pdf_path = br.pdf_path

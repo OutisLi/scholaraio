@@ -86,7 +86,7 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import requests
@@ -497,11 +497,15 @@ def _convert_chunk_cloud(
     """Process a single batch chunk via bounded concurrent CLI invocations."""
     max_workers = min(len(pdf_paths), max(1, int(opts.upload_workers or DEFAULT_UPLOAD_WORKERS)))
 
-    def _run_one(pdf_path: Path) -> ConvertResult:
-        return convert_pdf_cloud(pdf_path, opts, api_key=api_key, cloud_url=cloud_url)
+    def _run_one(item: tuple[int, Path]) -> ConvertResult:
+        idx, pdf_path = item
+        item_opts = opts
+        if opts.output_dir is not None:
+            item_opts = replace(opts, output_dir=opts.output_dir / f"{idx:04d}_{pdf_path.stem}")
+        return convert_pdf_cloud(pdf_path, item_opts, api_key=api_key, cloud_url=cloud_url)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-        return list(pool.map(_run_one, pdf_paths))
+        return list(pool.map(_run_one, enumerate(pdf_paths)))
 
 
 def _build_cloud_cli_command(

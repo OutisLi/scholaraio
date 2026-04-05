@@ -310,8 +310,37 @@ def test_convert_chunk_cloud_uses_bounded_parallel_workers(tmp_path, monkeypatch
     )
 
     assert max_workers_seen == [2]
-    assert submitted == pdf_paths
+    assert submitted == list(enumerate(pdf_paths))
     assert [res.pdf_path for res in results] == pdf_paths
+
+
+def test_convert_chunk_cloud_isolates_duplicate_stems_into_unique_output_dirs(tmp_path, monkeypatch):
+    pdf_a = tmp_path / "a" / "source.pdf"
+    pdf_b = tmp_path / "b" / "source.pdf"
+    pdf_a.parent.mkdir()
+    pdf_b.parent.mkdir()
+    pdf_a.write_bytes(b"%PDF-1.4\n")
+    pdf_b.write_bytes(b"%PDF-1.4\n")
+
+    seen_output_dirs: list[Path] = []
+
+    monkeypatch.setattr(
+        "scholaraio.ingest.mineru.convert_pdf_cloud",
+        lambda pdf_path, opts, **_kwargs: (
+            seen_output_dirs.append(opts.output_dir),
+            ConvertResult(pdf_path=pdf_path, md_path=(opts.output_dir / "index.md"), success=True),
+        )[1],
+    )
+
+    results = _convert_chunk_cloud(
+        [pdf_a, pdf_b],
+        ConvertOptions(output_dir=tmp_path / "out", upload_workers=2),
+        api_key="token",
+        cloud_url="https://mineru.example/api",
+    )
+
+    assert len(results) == 2
+    assert seen_output_dirs[0] != seen_output_dirs[1]
 
 
 def test_plan_cloud_chunking_uses_600_page_limit_when_only_page_count_exceeds(tmp_path, monkeypatch):

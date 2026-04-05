@@ -2759,9 +2759,22 @@ def cmd_attach_pdf(args: argparse.Namespace, cfg) -> None:
     elif result is not None:
         # Move/rename output to paper.md
         if result.md_path and result.md_path != existing_md:
+            md_src = result.md_path
+            md_src_parent = md_src.parent
             if existing_md.exists():
                 existing_md.unlink()
-            shutil.move(str(result.md_path), str(existing_md))
+            shutil.move(str(md_src), str(existing_md))
+            for images_src in [md_src.parent / "images", md_src.parent / f"{md_src.stem}_images"]:
+                if images_src.is_dir():
+                    target = paper_d / "images"
+                    if images_src == target:
+                        break
+                    if target.exists():
+                        shutil.rmtree(target)
+                    shutil.move(str(images_src), str(target))
+                    break
+            if md_src_parent != paper_d and md_src_parent.is_dir() and not any(md_src_parent.iterdir()):
+                md_src_parent.rmdir()
 
     # Clean up MinerU artifacts (keep images/)
     for pattern in ["*_layout.json", "*_content_list.json", "*_origin.pdf"]:
