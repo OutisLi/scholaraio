@@ -288,6 +288,33 @@ def test_wizard_parser_auto_prefers_configured_mineru_before_probe(monkeypatch, 
     assert "建议优先使用 MinerU" in out
 
 
+def test_wizard_parser_auto_detects_local_mineru_server(monkeypatch, capsys):
+    cfg = Config()
+    answers = iter(["3", "y"])
+    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: next(answers))
+    monkeypatch.setattr("scholaraio.setup.shutil.which", lambda _name: None)
+    monkeypatch.setattr(cfg, "resolved_mineru_api_key", lambda: "")
+    monkeypatch.setattr("scholaraio.setup._probe_url", lambda *_args, **_kwargs: False)
+
+    class DummyRequests:
+        @staticmethod
+        def get(url, timeout=2):
+            class _Resp:
+                status_code = 200
+
+            assert url == cfg.ingest.mineru_endpoint
+            return _Resp()
+
+    monkeypatch.setitem(__import__("sys").modules, "requests", DummyRequests)
+
+    choice = _wizard_parser(cfg, "zh")
+
+    assert choice.parser == "mineru"
+    assert choice.needs_mineru_key is False
+    out = capsys.readouterr().out
+    assert "建议优先使用 MinerU" in out
+
+
 def test_prompt_text_returns_empty_string_on_eof(monkeypatch):
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: (_ for _ in ()).throw(EOFError()))
 

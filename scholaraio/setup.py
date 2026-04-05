@@ -501,6 +501,30 @@ def _check_huggingface(lang: Lang) -> tuple[bool, str]:
     return False, "unreachable → Docling or Hugging Face model downloads may fail; prefer MinerU / ModelScope"
 
 
+def _wizard_mineru_available(cfg: Config) -> tuple[bool, bool]:
+    """Detect MinerU availability for setup wizard auto recommendation.
+
+    Returns:
+        A tuple of ``(available, cloud_only)`` where ``cloud_only`` means the
+        detected path requires a MinerU token instead of local deployment.
+    """
+    try:
+        import requests as _req
+
+        r = _req.get(cfg.ingest.mineru_endpoint, timeout=2)
+        if r.status_code < 500:
+            return True, False
+    except Exception:
+        pass
+
+    cli_available = bool(shutil.which("mineru-open-api"))
+    if bool(cfg.resolved_mineru_api_key()) and cli_available:
+        return True, True
+    if cli_available and _probe_url(MINERU_TOKEN_URL):
+        return True, True
+    return False, False
+
+
 def recommend_pdf_parser(mineru_available: bool, huggingface_reachable: bool, lang: Lang) -> tuple[str, str]:
     """Recommend MinerU or Docling from availability signals.
 
@@ -658,11 +682,9 @@ def _wizard_parser(cfg: Config, lang: Lang) -> ParserChoice:
         return ParserChoice(parser="docling", needs_mineru_key=False)
 
     print(t("parser_choice_auto", lang))
-    mineru_available = bool(cfg.resolved_mineru_api_key()) and bool(shutil.which("mineru-open-api"))
-    if mineru_available:
+    mineru_available, mineru_cloud_only = _wizard_mineru_available(cfg)
+    if mineru_cloud_only:
         print(t("parser_choice_auto_configured_mineru", lang))
-    else:
-        mineru_available = bool(shutil.which("mineru-open-api")) and _probe_url(MINERU_TOKEN_URL)
     hf_ok = _probe_url(HUGGINGFACE_URL)
     print(f"    MinerU: {t('availability_yes', lang) if mineru_available else t('availability_no', lang)}")
     print(f"    Hugging Face: {t('reachability_yes', lang) if hf_ok else t('reachability_no', lang)}")
