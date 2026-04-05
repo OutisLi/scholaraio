@@ -9,6 +9,7 @@ from scholaraio.setup import (
     ParserChoice,
     _check_docling,
     _check_huggingface,
+    _check_mineru,
     _prompt_text,
     _wizard_keys,
     _wizard_parser,
@@ -212,6 +213,27 @@ def test_check_mineru_reports_actionable_failure(monkeypatch):
     assert "mineru-open-api" in detail
     assert "token" in detail
     assert "Docker" in detail
+
+
+def test_check_mineru_prefers_local_server_even_when_token_cli_missing(monkeypatch):
+    cfg = Config()
+    monkeypatch.setattr(cfg, "resolved_mineru_api_key", lambda: "token")
+    monkeypatch.setattr("scholaraio.setup.shutil.which", lambda _name: None)
+
+    class DummyRequests:
+        @staticmethod
+        def get(*_args, **_kwargs):
+            class _Resp:
+                status_code = 200
+
+            return _Resp()
+
+    monkeypatch.setitem(__import__("sys").modules, "requests", DummyRequests)
+
+    ok, detail = _check_mineru(cfg, "en")
+
+    assert ok is True
+    assert "local server" in detail
 
 
 def test_wizard_parser_mineru_choice_skips_auto_probe(monkeypatch, capsys):

@@ -439,15 +439,6 @@ def run_check(cfg: Config | None = None, lang: Lang = "zh") -> list[CheckResult]
 
 def _check_mineru(cfg: Config, lang: Lang) -> tuple[bool, str]:
     """Check MinerU availability (local server or cloud CLI + token)."""
-    cloud_token = cfg.resolved_mineru_api_key()
-    cli_path = shutil.which("mineru-open-api")
-    if cloud_token and cli_path:
-        return True, f"mineru-open-api @ {cli_path} + token " + t("configured", lang)
-    if cloud_token and not cli_path:
-        if lang == "zh":
-            return False, "已配置 MinerU token，但未安装 mineru-open-api → pip install mineru-open-api"
-        return False, "MinerU token configured, but mineru-open-api is not installed → pip install mineru-open-api"
-
     try:
         import requests as _req
 
@@ -456,6 +447,15 @@ def _check_mineru(cfg: Config, lang: Lang) -> tuple[bool, str]:
             return True, f"local server @ {cfg.ingest.mineru_endpoint}"
     except Exception:
         pass
+
+    cloud_token = cfg.resolved_mineru_api_key()
+    cli_path = shutil.which("mineru-open-api")
+    if cloud_token and cli_path:
+        return True, f"mineru-open-api @ {cli_path} + token " + t("configured", lang)
+    if cloud_token and not cli_path:
+        if lang == "zh":
+            return False, "已配置 MinerU token，但未安装 mineru-open-api → pip install mineru-open-api"
+        return False, "MinerU token configured, but mineru-open-api is not installed → pip install mineru-open-api"
 
     if lang == "zh":
         return (

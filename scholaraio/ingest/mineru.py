@@ -78,6 +78,7 @@ MinerU 后端选项 (--backend)
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import logging
 import os
@@ -376,7 +377,6 @@ def _extract_field(data, field_name):
 # ============================================================================
 
 CLOUD_API_URL = "https://mineru.net/api/v4"
-CLOUD_TIMEOUT = 600  # backward-compatible fallback
 MINERU_OPEN_API_BIN = "mineru-open-api"
 
 
@@ -494,8 +494,14 @@ def _convert_chunk_cloud(
     api_key: str,
     cloud_url: str,
 ) -> list[ConvertResult]:
-    """Process a single batch chunk sequentially via the MinerU open-api CLI."""
-    return [convert_pdf_cloud(pdf_path, opts, api_key=api_key, cloud_url=cloud_url) for pdf_path in pdf_paths]
+    """Process a single batch chunk via bounded concurrent CLI invocations."""
+    max_workers = min(len(pdf_paths), max(1, int(opts.upload_workers or DEFAULT_UPLOAD_WORKERS)))
+
+    def _run_one(pdf_path: Path) -> ConvertResult:
+        return convert_pdf_cloud(pdf_path, opts, api_key=api_key, cloud_url=cloud_url)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+        return list(pool.map(_run_one, pdf_paths))
 
 
 def _build_cloud_cli_command(

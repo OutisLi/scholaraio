@@ -7,6 +7,7 @@ from pathlib import Path
 from scholaraio.ingest.mineru import (
     ConvertOptions,
     ConvertResult,
+    _convert_chunk_cloud,
     _convert_long_pdf_cloud,
     _plan_cloud_chunking,
     _resolve_cloud_model_version,
@@ -259,6 +260,57 @@ def test_convert_pdfs_cloud_batch_splits_into_chunks(tmp_path, monkeypatch):
     assert calls == [["paper-0.pdf", "paper-1.pdf"], ["paper-2.pdf"]]
     assert len(results) == 3
     assert all(result.success for result in results)
+
+
+def test_convert_chunk_cloud_uses_bounded_parallel_workers(tmp_path, monkeypatch):
+    import scholaraio.ingest.mineru as mineru
+
+    pdf_paths = []
+    for idx in range(3):
+        path = tmp_path / f"paper-{idx}.pdf"
+        path.write_bytes(b"%PDF-1.4\n")
+        pdf_paths.append(path)
+
+    submitted: list[Path] = []
+    max_workers_seen: list[int] = []
+
+    class FakeExecutor:
+        def __init__(self, max_workers):
+            max_workers_seen.append(max_workers)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def map(self, fn, items):
+            result = []
+            for item in items:
+                submitted.append(item)
+                result.append(fn(item))
+            return result
+
+    monkeypatch.setattr(mineru.concurrent.futures, "ThreadPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(
+        "scholaraio.ingest.mineru.convert_pdf_cloud",
+        lambda pdf_path, *_args, **_kwargs: ConvertResult(
+            pdf_path=pdf_path,
+            md_path=pdf_path.with_suffix(".md"),
+            success=True,
+        ),
+    )
+
+    results = _convert_chunk_cloud(
+        pdf_paths,
+        ConvertOptions(output_dir=tmp_path / "out", upload_workers=2),
+        api_key="token",
+        cloud_url="https://mineru.example/api",
+    )
+
+    assert max_workers_seen == [2]
+    assert submitted == pdf_paths
+    assert [res.pdf_path for res in results] == pdf_paths
 
 
 def test_plan_cloud_chunking_uses_600_page_limit_when_only_page_count_exceeds(tmp_path, monkeypatch):
