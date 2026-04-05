@@ -284,6 +284,8 @@ data/inbox/          # Drop PDFs here for ingestion
 data/inbox-proceedings/ # Drop proceedings volumes here for dedicated ingest
 ```
 
+Proceedings only enter the proceedings workflow from `data/inbox-proceedings/`. Regular `data/inbox/` items stay on the normal paper/document path unless you move them into the dedicated proceedings inbox explicitly.
+
 Full module reference → [`CLAUDE.md`](CLAUDE.md) or [`AGENTS.md`](AGENTS.md)
 
 ## Citation

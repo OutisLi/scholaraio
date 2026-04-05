@@ -30,10 +30,9 @@ The system should recognize that a very large PDF may be a proceedings volume ra
 
 ### Ingestion
 
-Users can ingest proceedings in two ways:
+Users can ingest proceedings in one way:
 
 1. Manual routing: place a proceedings PDF in `data/inbox-proceedings/`.
-2. Automatic routing: place a PDF in `data/inbox/`; if the system detects that it is a proceedings volume, it should switch to the proceedings ingest path automatically.
 
 ### Storage
 
@@ -118,24 +117,15 @@ It matches the desired product boundary: proceedings are distinct from ordinary 
 
 ## Architecture
 
-### 1. Detection Layer
+### 1. Routing Layer
 
-Add proceedings detection as a sibling to thesis detection.
+Proceedings routing is explicit rather than heuristic.
 
-Detection inputs:
+Routing input:
 
 - User-selected inbox (`data/inbox-proceedings/`) forces proceedings mode.
-- Automatic detection for `data/inbox/` uses rules plus LLM assistance.
 
-Initial detection signals:
-
-- Title patterns such as `Proceedings of`, `Symposium`, `Conference Proceedings`.
-- Many distinct high-confidence DOI occurrences.
-- Repeated author/title block structure across the document.
-- Table-of-contents style layouts.
-- Repeated reset of paper-like front matter within the same Markdown.
-
-Detection should be conservative. False negatives are preferable to false positives in V1.
+Regular `data/inbox/` items stay on the normal paper/document path even if they contain proceedings-like cues.
 
 ### 2. Proceedings Pipeline
 
@@ -144,12 +134,11 @@ Proceedings ingest should become a separate pipeline path rather than an overloa
 High-level stages:
 
 1. Convert source PDF to Markdown.
-2. Detect proceedings status if not already forced.
-3. Extract proceedings-level metadata.
-4. Segment the Markdown into candidate per-paper chunks.
-5. Extract metadata per chunk.
-6. Write proceedings and child-paper artifacts under `data/proceedings/`.
-7. Build or refresh proceedings-local indexes.
+2. Extract proceedings-level metadata.
+3. Segment the Markdown into candidate per-paper chunks.
+4. Extract metadata per chunk.
+5. Write proceedings and child-paper artifacts under `data/proceedings/`.
+6. Build or refresh proceedings-local indexes.
 
 ### 3. Segmentation Model
 
@@ -214,19 +203,18 @@ V1 can prioritize keyword search first if needed, with semantic retrieval added 
 
 - Add proceedings inbox processing.
 - Do not auto-route regular inbox items into proceedings; require explicit placement in `data/inbox-proceedings/`.
-- Keep thesis and proceedings detection independent and ordered clearly.
+- Keep thesis detection and proceedings inbox routing independent and ordered clearly.
 
 ### `ingest/extractor.py`
 
-- Add or expose proceedings detection helpers.
-- Avoid forcing single-paper assumptions once a file is classified as proceedings.
+- Avoid forcing single-paper assumptions once a file is explicitly classified as proceedings.
 
 ### New proceedings module(s)
 
 Suggested additions:
 
 - `scholaraio/proceedings.py` for path helpers and metadata I/O.
-- `scholaraio/ingest/proceedings.py` for detection, segmentation, and writeout orchestration.
+- `scholaraio/ingest/proceedings.py` for segmentation and writeout orchestration.
 
 ### `index.py` or new proceedings indexing module
 
@@ -244,8 +232,7 @@ Suggested additions:
 
 ## Error Handling
 
-- If proceedings detection confidence is low in the regular inbox, keep the file on the single-paper path.
-- If a proceedings volume is detected but segmentation produces no viable child papers, move it to a proceedings-specific pending/review state rather than silently ingesting it as one paper.
+- If a proceedings volume is manually routed but segmentation produces no viable child papers, move it to a proceedings-specific pending/review state rather than silently ingesting it as one paper.
 - Partial segmentation success is acceptable in V1 if the volume-level record is preserved and failed child chunks are surfaced clearly.
 
 ## Testing Strategy

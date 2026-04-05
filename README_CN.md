@@ -278,8 +278,12 @@ scholaraio/          # Python 包——CLI、所有核心模块
 .claude/skills/      # agent skills（AgentSkills.io 格式）
 .agents/skills/      # ↑ 符号链接，方便跨 agent 发现
 data/papers/         # 你的论文库（不进 git）
+data/proceedings/    # 论文集库（不进 git）
 data/inbox/          # 放入 PDF 即可入库
+data/inbox-proceedings/ # 显式放入论文集 PDF/MD，走专用 proceedings 流程
 ```
+
+论文集只会从 `data/inbox-proceedings/` 进入 proceedings 支线。普通 `data/inbox/` 中的文件不会再自动识别成 proceedings。
 
 完整模块参考 → [`CLAUDE.md`](CLAUDE.md) 或 [`AGENTS.md`](AGENTS.md)
 

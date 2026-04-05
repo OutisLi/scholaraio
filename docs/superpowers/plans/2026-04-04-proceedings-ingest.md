@@ -108,7 +108,7 @@ git -C /home/lzmo/repos/personal/scholaraio-issue-46 add scholaraio/proceedings.
 git -C /home/lzmo/repos/personal/scholaraio-issue-46 commit -m "Add proceedings storage and keyword index helpers"
 ```
 
-## Task 3: Add proceedings detection helpers
+## Task 3: Add dedicated proceedings routing helpers
 
 **Files:**
 - Create: `scholaraio/ingest/proceedings.py`
@@ -127,29 +127,25 @@ Use compact fixtures that include patterns like `Proceedings of`, repeated DOI/t
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `conda run -n scholaraio python -m pytest tests/test_proceedings.py -k detect -v`
-Expected: FAIL because no proceedings detection entry point exists yet.
+Run: `conda run -n scholaraio python -m pytest tests/test_proceedings.py -k route -v`
+Expected: FAIL because no dedicated proceedings routing entry point exists yet.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Implement `scholaraio/ingest/proceedings.py` with conservative helpers:
+Implement `scholaraio/ingest/proceedings.py` with dedicated inbox helpers and writeout preparation only.
 
-- `looks_like_proceedings_text(...)`
-- `detect_proceedings_from_md(...)`
-- optional LLM-assisted detection wrapper that safely falls back to heuristics when no key is available
-
-Wire `scholaraio/ingest/pipeline.py` to call these helpers at the right point, parallel to thesis detection but without changing current thesis behavior.
+Wire `scholaraio/ingest/pipeline.py` to route `data/inbox-proceedings/` into the proceedings path without changing current thesis behavior.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `conda run -n scholaraio python -m pytest tests/test_proceedings.py -k detect -v`
+Run: `conda run -n scholaraio python -m pytest tests/test_proceedings.py -k route -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git -C /home/lzmo/repos/personal/scholaraio-issue-46 add scholaraio/ingest/proceedings.py scholaraio/ingest/pipeline.py tests/test_proceedings.py
-git -C /home/lzmo/repos/personal/scholaraio-issue-46 commit -m "Add proceedings detection helpers"
+git -C /home/lzmo/repos/personal/scholaraio-issue-46 commit -m "Add dedicated proceedings routing helpers"
 ```
 
 ## Task 4: Add proceedings ingest writeout
@@ -211,7 +207,7 @@ git -C /home/lzmo/repos/personal/scholaraio-issue-46 commit -m "Add proceedings 
 Add tests that:
 
 - files placed in `data/inbox-proceedings/` go directly to proceedings ingest
-- files placed in `data/inbox/` and detected as proceedings are routed away from `data/papers/`
+- files placed in `data/inbox/` stay on the normal paper path
 - ordinary papers in `data/inbox/` still go to `data/papers/`
 
 - [ ] **Step 2: Run test to verify it fails**

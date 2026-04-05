@@ -321,6 +321,15 @@ Very long PDFs are split automatically before MinerU conversion when needed:
 - local MinerU follows `chunk_page_limit` (default: more than 100 pages)
 - MinerU cloud follows the stricter of its documented limits (more than 600 pages or 200MB) and estimates a safe chunk size when only the file-size limit is exceeded
 
+### `data/inbox-proceedings/` Directory
+
+```text
+data/inbox-proceedings/
+└── volume.pdf    # Proceedings volume / collected papers (explicit manual routing only)
+```
+
+Proceedings are only ingested from this dedicated inbox. Regular `data/inbox/` items do not auto-route into `data/proceedings/`; if the user wants the proceedings workflow, they must place the file in `data/inbox-proceedings/` explicitly.
+
 ### `data/pending/` Directory
 
 ```text
