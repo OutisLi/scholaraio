@@ -262,11 +262,7 @@ def _search_result_consistent_with_local(meta: PaperMetadata, cr_data: dict, s2_
     candidate_year = _candidate_year(cr_data, s2_data, oa_data)
 
     author_conflict = bool(local_last and candidate_last and local_last != candidate_last)
-    year_conflict = bool(
-        local_year
-        and candidate_year
-        and abs(int(local_year) - int(candidate_year)) > 2
-    )
+    year_conflict = bool(local_year and candidate_year and abs(int(local_year) - int(candidate_year)) > 2)
     return not (author_conflict and year_conflict)
 
 

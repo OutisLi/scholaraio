@@ -341,16 +341,19 @@ def test_run_pipeline_auto_injects_translate_for_new_ingest(tmp_path: Path, monk
         paper_calls.append("index")
         return StepResult.OK
 
-    monkeypatch.setattr("scholaraio.ingest.pipeline.STEPS", {
-        "mineru": SimpleNamespace(scope="inbox", fn=lambda ctx: StepResult.OK, desc=""),
-        "extract": SimpleNamespace(scope="inbox", fn=lambda ctx: StepResult.OK, desc=""),
-        "dedup": SimpleNamespace(scope="inbox", fn=lambda ctx: StepResult.OK, desc=""),
-        "ingest": SimpleNamespace(scope="inbox", fn=lambda ctx: StepResult.OK, desc=""),
-        "toc": SimpleNamespace(scope="papers", fn=fake_toc, desc=""),
-        "translate": SimpleNamespace(scope="papers", fn=fake_translate, desc=""),
-        "embed": SimpleNamespace(scope="global", fn=fake_embed, desc=""),
-        "index": SimpleNamespace(scope="global", fn=fake_index, desc=""),
-    })
+    monkeypatch.setattr(
+        "scholaraio.ingest.pipeline.STEPS",
+        {
+            "mineru": SimpleNamespace(scope="inbox", fn=lambda ctx: StepResult.OK, desc=""),
+            "extract": SimpleNamespace(scope="inbox", fn=lambda ctx: StepResult.OK, desc=""),
+            "dedup": SimpleNamespace(scope="inbox", fn=lambda ctx: StepResult.OK, desc=""),
+            "ingest": SimpleNamespace(scope="inbox", fn=lambda ctx: StepResult.OK, desc=""),
+            "toc": SimpleNamespace(scope="papers", fn=fake_toc, desc=""),
+            "translate": SimpleNamespace(scope="papers", fn=fake_translate, desc=""),
+            "embed": SimpleNamespace(scope="global", fn=fake_embed, desc=""),
+            "index": SimpleNamespace(scope="global", fn=fake_index, desc=""),
+        },
+    )
 
     run_pipeline(["mineru", "extract", "dedup", "ingest", "toc", "embed", "index"], cfg, {})
 

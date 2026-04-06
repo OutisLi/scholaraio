@@ -190,7 +190,11 @@ def _find_local_model_path(model_name: str, cache_dir: str) -> str | None:
             return str(candidate)
 
     for candidate in org_dir.iterdir():
-        if candidate.is_dir() and candidate.name.startswith(repo.split(".", 1)[0]) and _looks_like_sentence_transformer_dir(candidate):
+        if (
+            candidate.is_dir()
+            and candidate.name.startswith(repo.split(".", 1)[0])
+            and _looks_like_sentence_transformer_dir(candidate)
+        ):
             return str(candidate)
 
     return None
