@@ -17,7 +17,13 @@
 
 ---
 
-你的 coding agent 已经能读代码、写代码、跑实验。ScholarAIO 给它加上一个结构化的论文知识库——于是同一个 agent，既能帮你写代码，也能检索文献、交叉验证结果、复现论文方法、起草文稿。一个终端，一个 agent，完成科研全流程。
+你的 coding agent 已经能读代码、写代码、跑实验。ScholarAIO 给它加上一个结构化的科研工作台，于是同一个 agent 不只会写代码，也能检索文献、交叉验证结果、更准确地使用科学软件，并在一个终端里推动完整科研流程。
+
+它的特别之处在于：
+
+- 你的论文库会变成同一个 agent 可持续复用的知识底座。
+- 遇到科学软件问题时，agent 可以在运行时查官方文档，而不是只靠 prompt 猜参数。
+- 系统从一开始就按“可继续扩展更多工具和工作流”来设计。
 
 <!-- TODO: 加 demo GIF -->
 <!-- <div align="center">
@@ -122,7 +128,8 @@ cp ~/.codex/scholaraio/config.yaml ~/.scholaraio/config.yaml
 | **持久化笔记** | 跨会话记忆 | Agent 的分析结果按论文保存（`notes.md`），再次访问时复用已有发现，无需重读全文——省 token、不重复劳动 |
 | **研究洞察** | 阅读行为分析 | 搜索热词、高频阅读论文、阅读趋势、语义近邻推荐——发现你可能忽略的文献 |
 | **联邦发现** | 跨库搜索 | 一条命令同时搜索主库、explore 库和 arXiv；可直接把 arXiv PDF 拉取进 ingest 流水线 |
-| **科学计算工具文档** | 运行时精确查阅 | `toolref` 可入库 Quantum ESPRESSO、LAMMPS、GROMACS、OpenFOAM 与 curated bioinformatics 官方文档，让 agent 更精准回答参数与工作流问题 |
+| **AI for Science 运行时能力** | 更准确地使用科学软件 | agent 可以通过 `toolref` 在运行时查官方接口文档；当前已覆盖 Quantum ESPRESSO、LAMMPS、GROMACS、OpenFOAM 和 curated bioinformatics 工具 |
+| **可扩展工具接入** | 持续接入用户真正需要的软件 | ScholarAIO 不止支持当前这五类科学工具；它从设计上就支持继续接入新的用户需求工具，并配有专门的 onboarding 工作流 |
 | **绘图与可视化** | 出版级图表 | Mermaid（流程图、时序图、ER 图、甘特图、思维导图）+ Inkscape 矢量图形——输出 PNG/SVG/PDF |
 | **学术写作** | AI 辅助撰写 | 文献综述、论文章节、引用验证、审稿回复、研究空白分析——每条引用可追溯至你自己的文献库 |
 

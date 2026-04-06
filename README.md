@@ -17,7 +17,13 @@
 
 ---
 
-Your coding agent already reads code, writes code, and runs experiments. ScholarAIO gives it a structured knowledge base of your research papers — so the same agent that writes your code can also search your literature, cross-check results against published findings, reproduce methods from papers, and draft your manuscript. One terminal, one agent, the full research loop.
+Your coding agent already reads code, writes code, and runs experiments. ScholarAIO gives it a structured research workspace, so the same agent can search your literature, cross-check results against published findings, use scientific software more accurately, and help drive the full research loop from one terminal.
+
+What makes it different:
+
+- Your papers become a searchable, reusable knowledge base for the same agent that writes your code.
+- Scientific software questions can be grounded in official docs at runtime instead of prompt guesswork.
+- The system is designed to keep growing as users need more scientific tools and workflows.
 
 <!-- TODO: Add demo GIF here -->
 <!-- <div align="center">
@@ -120,7 +126,8 @@ Without one of those two options, running `scholaraio` from another project may 
 | **Persistent Notes** | Cross-session memory | Agent analysis is saved per-paper (`notes.md`). Revisiting a paper reuses prior findings instead of re-reading the full text — saves tokens and avoids redundant work |
 | **Research Insights** | Reading behavior analytics | Search hot keywords, most-read papers, reading trends, and semantic neighbor recommendations for papers you haven't read yet |
 | **Federated Discovery** | Search across silos | Search your main library, explore silos, and arXiv in one command; pull arXiv PDFs directly into the ingest pipeline |
-| **Scientific Tool Docs** | Runtime guidance for computational tools | `toolref` ingests official docs for Quantum ESPRESSO, LAMMPS, GROMACS, OpenFOAM, and curated bioinformatics tools so agents can answer parameter and workflow questions precisely |
+| **AI-for-Science Runtime** | Use scientific software more accurately | Agents can look up official tool interfaces at runtime through `toolref`, which already covers Quantum ESPRESSO, LAMMPS, GROMACS, OpenFOAM, and curated bioinformatics tools |
+| **Extensible Tool Onboarding** | Add the next tool users need | ScholarAIO is designed to keep expanding beyond the first five scientific domains, with a dedicated onboarding workflow for bringing in additional user-requested tools |
 | **Diagrams & Figures** | Publication-ready visuals | Mermaid (flowcharts, sequence diagrams, ER diagrams, Gantt charts, mind maps) and vector graphics via Inkscape — output PNG/SVG/PDF |
 | **Academic Writing** | AI-assisted drafting | Literature review, paper sections, citation check, rebuttal, gap analysis — every claim traceable to your own library |
 
