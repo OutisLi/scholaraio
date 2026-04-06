@@ -109,3 +109,8 @@
         - recent_unique_read_names
         - recommend_unread_neighbors
         - list_workspace_counts
+
+::: scholaraio.ingest.extractor
+    options:
+      members:
+        - get_extractor

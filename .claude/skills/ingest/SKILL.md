@@ -53,7 +53,14 @@ scholaraio pipeline <preset> [--dry-run] [--no-api] [--force] [--inspect]
    - `data/inbox-doc/` — 非论文文档（技术报告、讲义、Word/Excel/PPT、标准文档等，跳过 DOI 去重，LLM 生成标题/摘要）
    - `data/inbox-proceedings/` — 论文集（强制按 proceedings 处理；普通 `data/inbox/` 不再自动识别）
 
-4. 论文集（proceedings）采用半自动两阶段流程：
+4. 论文类的 Stage-1 元数据提取由 `ingest.extractor` 控制：
+   - `regex`：纯正则，最快，不调用 LLM
+   - `auto`：正则优先，关键字段缺失时再调用 LLM
+   - `robust`：正则 + LLM 双跑，校正 OCR 错误并处理多 DOI 情况（默认）
+   - `llm`：纯 LLM 提取
+   - 如果用户问“为什么标题 / 作者 / DOI 提取不准”，先检查这里的模式配置
+
+5. 论文集（proceedings）采用半自动两阶段流程：
    - 第一阶段：`scholaraio pipeline ingest` 只负责把 PDF/MD 转成 `data/proceedings/<Volume>/proceeding.md`，并生成 `split_candidates.json`
    - 此时不会自动拆成子论文；CLI 会显式提示等待 agent 审阅 `split_candidates.json` 并生成 `split_plan.json`
    - 第二阶段：由 agent/人工审阅结构后，执行
@@ -64,7 +71,7 @@ scholaraio proceedings apply-split <proceeding_dir> <split_plan.json>
 
    - 这一步才会真正把子论文落到 `data/proceedings/<Volume>/papers/<Paper>/`
 
-5. proceedings 拆分后支持半自动清洗流程：
+6. proceedings 拆分后支持半自动清洗流程：
    - 先执行
 
 ```bash
@@ -84,25 +91,25 @@ scholaraio proceedings apply-clean <proceeding_dir> <clean_plan.json>
    - 这里的“删除标签”只针对明显错误的独立 heading/tag 行，不改正文段落内容
    - 推荐先做结构性清洗（保留/重命名/重分类/删除），再考虑作者、摘要、DOI 等元数据提纯
 
-6. Office 文件处理流程（`data/inbox-doc/` 中的 DOCX/XLSX/PPTX）：
+7. Office 文件处理流程（`data/inbox-doc/` 中的 DOCX/XLSX/PPTX）：
    - `step_office_convert`（MarkItDown）→ 转换为 `<stem>.md`
    - `step_extract_doc`（LLM 生成标题/摘要）
    - `step_ingest`（写入 `data/papers/`）
    - **依赖**：需安装 `pip install 'markitdown[docx,pptx,xlsx]'`
 
-7. 专利文献处理逻辑（`data/inbox-patent/`）：
+8. 专利文献处理逻辑（`data/inbox-patent/`）：
    - 自动提取公开号（CN/US/EP/WO/JP/KR/DE/FR/GB/TW/IN/AU 等格式）
    - 按公开号去重（非 DOI），跳过 DOI 检查
    - 自动标记 `paper_type: patent`
 
-8. 无 DOI 论文的处理逻辑：
+9. 无 DOI 论文的处理逻辑：
    - 来自 `data/inbox-thesis/` → 直接标记为 thesis 并入库
    - 来自 `data/inbox-doc/` → 标记为 document 类型，LLM 生成标题和摘要后入库
    - 来自 `data/inbox/` → LLM 分析判断是否 thesis
      - 是 thesis → 标记并入库
      - 不是 thesis → 转入 `data/pending/` 待人工确认
 
-9. 超长 PDF 会在 MinerU 转换前按需自动切分后合并：
+10. 超长 PDF 会在 MinerU 转换前按需自动切分后合并：
    - 本地 MinerU 按 `chunk_page_limit`（默认 >100 页）
    - 云端 MinerU 同时遵循 `>600 页` 和 `>200MB` 两个限制，并在仅超大小时估算更安全的分片页数
 
