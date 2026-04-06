@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use ScholarAIO in your research, please cite it as below."
 title: "ScholarAIO"
-abstract: "Scholar All-In-One — local academic literature explorer powered by AI"
+abstract: "Scholar All-In-One — A research infrastructure for AI agents"
 type: software
 license: MIT
 repository-code: "https://github.com/zimoliao/scholaraio"

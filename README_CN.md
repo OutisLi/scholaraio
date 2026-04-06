@@ -5,7 +5,7 @@
 
 # ScholarAIO
 
-**Scholar All-In-One — 为 AI agent 打造的科研知识基础设施。**
+**Scholar All-In-One — A research infrastructure for AI agents.**
 
 [English](README.md) | [中文](README_CN.md)
 

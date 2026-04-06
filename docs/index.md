@@ -1,8 +1,8 @@
 # ScholarAIO
 
-**Scholar All-In-One** — an AI-native research terminal for coding agents.
+**Scholar All-In-One** — A research infrastructure for AI agents.
 
-ScholarAIO is a research terminal built around AI coding agents. You interact with your literature knowledge base through natural language — searching, reading, analyzing, and writing — all from the command line.
+ScholarAIO is a research infrastructure for AI agents. You interact with your literature knowledge base through natural language — searching, reading, analyzing, and writing — all from the command line.
 
 ## Features
 

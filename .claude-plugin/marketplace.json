@@ -5,7 +5,7 @@
     "email": "zimoliao@mail.ustc.edu.cn"
   },
   "metadata": {
-    "description": "ScholarAIO — Academic research terminal for Claude Code. Search, read, analyze, and operationalize papers from your local knowledge base while coding.",
+    "description": "ScholarAIO — A research infrastructure for AI agents. Search, read, analyze, and operationalize papers from your local knowledge base while coding.",
     "version": "1.3.0"
   },
   "plugins": [

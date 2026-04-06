@@ -4,7 +4,7 @@ This file is the general project guide for ScholarAIO across multiple AI coding 
 
 ## Project Positioning
 
-ScholarAIO is a research terminal built around AI coding agents. Users complete the full workflow of literature search, reading, discussion, analysis, and writing through natural language. The `scholaraio` Python package provides the infrastructure (PDF parsing, hybrid retrieval, topic modeling, citation graphs, and more), while the agent is responsible for understanding intent, orchestrating tools, integrating results, and participating in academic discussion.
+ScholarAIO is a research infrastructure for AI agents. Users complete the full workflow of literature search, reading, discussion, analysis, and writing through natural language. The `scholaraio` Python package provides the infrastructure (PDF parsing, hybrid retrieval, topic modeling, citation graphs, and more), while the agent is responsible for understanding intent, orchestrating tools, integrating results, and participating in academic discussion.
 
 ### Interaction Model
 
