@@ -3097,7 +3097,7 @@ def cmd_citation_check(args: argparse.Namespace, cfg) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scholaraio",
-        description="本地学术文献检索工具",
+        description="面向 AI coding agent 的研究终端",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

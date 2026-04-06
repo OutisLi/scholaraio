@@ -45,6 +45,13 @@ class TestSetupPromptTransparency:
 
 
 class TestCliHelpLocalization:
+    def test_root_help_uses_research_terminal_positioning(self):
+        parser = cli._build_parser()
+        root_help = parser.format_help()
+
+        assert "面向 AI coding agent 的研究终端" in root_help
+        assert "本地学术文献检索工具" not in root_help
+
     def test_setup_help_is_fully_localized(self):
         parser = cli._build_parser()
         setup_parser = parser._subparsers._group_actions[0].choices["setup"]

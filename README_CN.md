@@ -204,7 +204,7 @@ PDF → MinerU → 结构化 Markdown（图表 + LaTeX 公式保留）
 scholaraio search QUERY       关键词检索（FTS5）
 scholaraio vsearch QUERY      语义向量检索
 scholaraio usearch QUERY      融合检索（关键词 + 语义）
-scholaraio fsearch QUERY      联邦搜索（主库 / explore / arXiv）
+scholaraio fsearch QUERY      联邦搜索（主库 / proceedings / explore / arXiv）
 scholaraio search-author NAME 按作者搜索
 scholaraio top-cited          按引用量排序
 scholaraio show PAPER         查看论文内容（L1-L4）
