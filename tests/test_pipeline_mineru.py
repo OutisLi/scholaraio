@@ -70,6 +70,28 @@ def test_cloud_batch_uses_safe_asset_directory_for_long_pdf_name(tmp_path, monke
     )
 
 
+def test_move_assets_normalizes_safe_stem_json_artifacts(tmp_path):
+    import scholaraio.ingest.mineru as mineru
+    import scholaraio.ingest.pipeline as pipeline
+
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    dest = tmp_path / "paper"
+    dest.mkdir()
+    long_stem = "a" * 250
+    safe_stem = Path(mineru._cloud_safe_pdf_name(Path(f"{long_stem}.pdf"))).stem
+    (inbox / f"{safe_stem}_layout.json").write_text("{}", encoding="utf-8")
+    (inbox / f"{safe_stem}_content_list.json").write_text("[]", encoding="utf-8")
+    (inbox / f"{safe_stem}_paper_origin.pdf").write_bytes(b"%PDF-1.4\n")
+
+    pipeline._move_assets(inbox, dest, long_stem, long_stem)
+
+    assert (dest / "layout.json").exists()
+    assert (dest / "content_list.json").exists()
+    assert (dest / "paper_origin.pdf").exists()
+    assert not any(path.name.startswith(safe_stem) for path in dest.iterdir())
+
+
 def test_step_mineru_falls_back_without_cloud_key(tmp_path, monkeypatch):
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4\n")

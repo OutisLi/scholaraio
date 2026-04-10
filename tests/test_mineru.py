@@ -307,6 +307,37 @@ def test_convert_pdf_rejects_invalid_pdf_before_local_request(tmp_path, monkeypa
     assert "invalid PDF header" in (result.error or "")
 
 
+def test_convert_pdf_saves_content_list_with_safe_name_for_long_filename(tmp_path, monkeypatch):
+    long_stem = "a" * 250
+    pdf_path = tmp_path / f"{long_stem}.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    safe_stem = Path(_cloud_safe_pdf_name(pdf_path)).stem
+
+    _allow_pdf_validation(monkeypatch)
+
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {
+                "results": {
+                    pdf_path.stem: {
+                        "md_content": "# ok\n",
+                        "content_list": [{"type": "text", "text": "ok"}],
+                    }
+                }
+            }
+
+    monkeypatch.setattr("scholaraio.ingest.mineru.requests.post", lambda *_args, **_kwargs: FakeResponse())
+
+    result = convert_pdf(pdf_path, ConvertOptions(output_dir=tmp_path, save_content_list=True))
+
+    assert result.success is True
+    assert (tmp_path / f"{safe_stem}_content_list.json").exists()
+    assert f"{long_stem}_content_list.json" not in {path.name for path in tmp_path.iterdir()}
+
+
 def test_convert_pdf_cloud_invokes_mineru_open_api_extract_with_token_and_flags(tmp_path, monkeypatch):
     pdf_path = tmp_path / "paper.pdf"
     pdf_path.write_bytes(b"%PDF-1.4")

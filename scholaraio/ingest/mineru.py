@@ -476,7 +476,7 @@ def convert_pdf(pdf_path: Path, opts: ConvertOptions) -> ConvertResult:
     if opts.save_content_list:
         cl = _extract_field(data, "content_list")
         if cl:
-            cl_path = out_dir / (pdf_path.stem + "_content_list.json")
+            cl_path = out_dir / f"{_safe_pdf_artifact_stem(pdf_path)}_content_list.json"
             cl_path.write_text(json.dumps(cl, ensure_ascii=False, indent=2), encoding="utf-8")
 
     _log.info("-> %s (%s, %.1fs)", md_path.name, _fmt_size(result.md_size), result.elapsed_seconds)

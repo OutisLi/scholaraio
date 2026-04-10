@@ -2367,16 +2367,23 @@ def _safe_glob(parent: Path, pattern: str) -> list[Path]:
 def _move_assets(inbox_dir: Path, dest_dir: Path, asset_prefix: str, md_stem: str) -> None:
     """Move MinerU assets (images, layout.json, etc.) from inbox to dest."""
     images_dir, json_files, origin_pdfs = _find_assets(inbox_dir, asset_prefix, md_stem)
+    candidate_stems = _asset_stem_candidates(asset_prefix, md_stem)
     if images_dir:
         shutil.move(str(images_dir), str(dest_dir / "images"))
     for f in json_files:
-        prefix = asset_prefix if f.name.startswith(asset_prefix) else md_stem
-        dest_name = f.name.replace(f"{prefix}_", "", 1)
+        dest_name = _strip_artifact_prefix(f.name, candidate_stems)
         shutil.move(str(f), str(dest_dir / dest_name))
     for f in origin_pdfs:
-        prefix = asset_prefix if f.name.startswith(asset_prefix) else md_stem
-        dest_name = f.name.replace(f"{prefix}_", "", 1)
+        dest_name = _strip_artifact_prefix(f.name, candidate_stems)
         shutil.move(str(f), str(dest_dir / dest_name))
+
+
+def _strip_artifact_prefix(name: str, candidate_stems: list[str]) -> str:
+    for stem in candidate_stems:
+        marker = f"{stem}_"
+        if stem and name.startswith(marker):
+            return name.removeprefix(marker)
+    return name
 
 
 def _move_to_pending(
