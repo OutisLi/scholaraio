@@ -11,9 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **Qwen agent support**: Added `.qwen/skills` symlink to `.claude/skills/` so Qwen-based agents can discover ScholarAIO skills out of the box
 - **Qwen project context**: Added `.qwen/QWEN.md` so Qwen Code has a repository-native project context file instead of relying on `AGENTS.md` / `CLAUDE.md`
+- **Cursor native project rules**: Added `.cursor/rules/scholaraio.mdc` as the primary Cursor integration path, with `AGENTS.md` as the shared multi-agent instruction source and `.cursorrules` kept only as a legacy fallback
 
-### Changed
+### Fixed
 
+- **Cursor compatibility CI coverage**: Added regression coverage to keep the Cursor rule wrapper lightweight and explicitly MCP-free
+- **Proceedings routing test stability**: Tests no longer assume the first `data/proceedings` entry is a proceedings volume directory, avoiding CI-only failures when `proceedings.db` sorts before real volume folders
 - **Unified search transparency**: `usearch` and `fsearch` now print an explicit message when semantic retrieval is unavailable and the command degrades to keyword-only search
 
 ## [1.3.0] — 2026-04-06

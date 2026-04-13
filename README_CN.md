@@ -79,7 +79,7 @@ ScholarAIO 的设计目标是 **agent 无关**，但不同 agent 的接入方式
 | [Codex](https://openai.com/codex) / OpenClaw                  | `AGENTS.md` + `.agents/skills/`   | 注册到 `~/.agents/skills/` |
 | [Cline](https://github.com/cline/cline)                       | `.clinerules` + `.claude/skills/` | CLI + skills               |
 | [Qwen](https://qwen.ai/)                                      | `.qwen/QWEN.md` + `.qwen/skills/` | CLI + skills               |
-| [Cursor](https://cursor.sh)                                   | `.cursorrules`                    | CLI + skills               |
+| [Cursor](https://cursor.sh)                                   | `.cursor/rules/scholaraio.mdc` + `AGENTS.md`（`.cursorrules` 旧版 fallback） | CLI + skills               |
 | [Windsurf](https://codeium.com/windsurf)                      | `.windsurfrules`                  | CLI + skills               |
 | [GitHub Copilot](https://github.com/features/copilot)         | `.github/copilot-instructions.md` | CLI + skills               |
 
