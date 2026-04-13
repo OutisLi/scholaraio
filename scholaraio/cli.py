@@ -421,7 +421,7 @@ def cmd_usearch(args: argparse.Namespace, cfg) -> None:
 
     query = " ".join(args.query)
     t0 = time.monotonic()
-    results = unified_search(
+    results, diagnostics = unified_search(
         query,
         cfg.index_db,
         top_k=_resolve_top(args, cfg.search.top_k),
@@ -429,6 +429,7 @@ def cmd_usearch(args: argparse.Namespace, cfg) -> None:
         year=args.year,
         journal=args.journal,
         paper_type=args.paper_type,
+        return_diagnostics=True,
     )
     elapsed = time.monotonic() - t0
     store = get_store()
@@ -438,6 +439,8 @@ def cmd_usearch(args: argparse.Namespace, cfg) -> None:
         ui(f'未找到与 "{query}" 相关的结果。')
         return
 
+    if diagnostics.get("vector_degraded"):
+        ui("提示：向量检索不可用，已降级为关键词检索。\n")
     ui(f'融合检索结果（"{query}"，共 {len(results)} 条）\n')
     for i, r in enumerate(results, start=1):
         score = r.get("score", 0.0)
@@ -2085,13 +2088,22 @@ def cmd_fsearch(args: argparse.Namespace, cfg) -> None:
                 from scholaraio.index import unified_search
 
                 try:
-                    results = unified_search(query, cfg.index_db, top_k=top_k, cfg=cfg)
+                    results, diagnostics = unified_search(
+                        query,
+                        cfg.index_db,
+                        top_k=top_k,
+                        cfg=cfg,
+                        return_diagnostics=True,
+                    )
                 except Exception as e:
                     ui(f"  主库搜索失败：{e}")
                     results = []
+                    diagnostics = {"vector_degraded": False}
             if not results:
                 ui("  无结果")
             else:
+                if diagnostics.get("vector_degraded"):
+                    ui("  提示：向量检索不可用，已降级为关键词检索。")
                 for i, r in enumerate(results, 1):
                     score = r.get("score", 0.0)
                     _print_search_result(i, r, extra=f"{_format_match_tag(r.get('match', '?'))} {score:.3f}")

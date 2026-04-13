@@ -833,7 +833,8 @@ def unified_search(
     journal: str | None = None,
     paper_type: str | None = None,
     paper_ids: set[str] | None = None,
-) -> list[dict]:
+    return_diagnostics: bool = False,
+) -> list[dict] | tuple[list[dict], dict]:
     """融合检索：FTS5 关键词 + FAISS 语义向量，合并去重排序。
 
     两路并行检索，各取 ``top_k`` 条候选，按 ``paper_id`` 去重后
@@ -853,12 +854,17 @@ def unified_search(
         paper_ids: 论文 UUID 白名单，仅返回集合内的结果。
 
     Returns:
-        论文字典列表，按综合得分降序。每项包含 ``paper_id``, ``title``,
-        ``authors``, ``year``, ``journal``, ``score``, ``match``
-        （``"fts"`` / ``"vec"`` / ``"both"``）。
+        默认返回论文字典列表，按综合得分降序。每项包含 ``paper_id``,
+        ``title``, ``authors``, ``year``, ``journal``, ``score``,
+        ``match``（``"fts"`` / ``"vec"`` / ``"both"``）。
+        当 ``return_diagnostics=True`` 时，返回 ``(results, diagnostics)``
+        二元组，其中 ``diagnostics["vector_degraded"]`` 表示是否因为
+        向量检索不可用或运行失败而降级到仅使用 FTS 结果。
     """
     if top_k is None:
         top_k = cfg.search.top_k if cfg is not None else 20
+
+    diagnostics = {"vector_degraded": False}
 
     # -- FTS5 leg --
     fts_results: list[dict] = []
@@ -892,10 +898,12 @@ def unified_search(
             paper_ids=paper_ids,
         )
     except (FileNotFoundError, ImportError):
+        diagnostics["vector_degraded"] = True
         pass
     except Exception:
         # Runtime vector initialization can fail in restricted/offline
         # environments; unified search must still return FTS results.
+        diagnostics["vector_degraded"] = True
         pass
 
     # -- Merge via Reciprocal Rank Fusion (RRF) --
@@ -925,8 +933,10 @@ def unified_search(
                 "match": "vec",
             }
 
-    results = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
-    return results[:top_k]
+    results = sorted(merged.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+    if return_diagnostics:
+        return results, diagnostics
+    return results
 
 
 # ============================================================================
