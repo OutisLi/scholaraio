@@ -636,6 +636,73 @@ class TestOptionalDependencyHints:
         assert any("pip install scholaraio[pdf]" in msg for msg in errors)
 
 
+class TestTopicCliErrors:
+    def test_cmd_topics_reports_embedding_disabled_cleanly(self, tmp_path, monkeypatch):
+        errors: list[str] = []
+        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            "scholaraio.topics.build_topics",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(FileNotFoundError("当前 embed.provider=none，无法构建主题模型")),
+        )
+
+        cfg = SimpleNamespace(
+            index_db=tmp_path / "index.db",
+            papers_dir=tmp_path / "papers",
+            topics_model_dir=tmp_path / "topic_model",
+            topics=SimpleNamespace(min_topic_size=5, nr_topics=0),
+        )
+        args = Namespace(
+            build=True,
+            rebuild=False,
+            min_topic_size=None,
+            nr_topics=None,
+            reduce=None,
+            merge=None,
+            topic=None,
+            show_outliers=False,
+            viz=False,
+        )
+
+        try:
+            cli.cmd_topics(args, cfg)
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected SystemExit")
+
+        assert any("embed.provider=none" in msg for msg in errors)
+
+    def test_cmd_explore_topics_reports_embedding_disabled_cleanly(self, tmp_path, monkeypatch):
+        errors: list[str] = []
+        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr("scholaraio.explore._explore_dir", lambda *_args, **_kwargs: tmp_path / "explore")
+        monkeypatch.setattr(
+            "scholaraio.explore.build_explore_topics",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(FileNotFoundError("当前 embed.provider=none，无法构建主题模型")),
+        )
+
+        cfg = SimpleNamespace()
+        args = Namespace(
+            explore_action="topics",
+            name="demo",
+            build=True,
+            rebuild=False,
+            min_topic_size=None,
+            nr_topics=None,
+            topic=None,
+            top=None,
+        )
+
+        try:
+            cli.cmd_explore(args, cfg)
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected SystemExit")
+
+        assert any("embed.provider=none" in msg for msg in errors)
+
+
 class TestAttachPdfFallback:
     def test_attach_pdf_falls_back_without_cloud_key(self, tmp_path, monkeypatch):
         paper_dir = tmp_path / "papers" / "Smith-2023-Test"

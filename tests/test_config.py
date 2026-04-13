@@ -266,6 +266,11 @@ class TestBuildConfig:
         cfg = _build_config({}, tmp_path)
         assert cfg.embed.provider == "local"
 
+    def test_openai_compat_embed_defaults_are_cloud_friendly(self, tmp_path):
+        cfg = _build_config({"embed": {"provider": "openai-compat"}}, tmp_path)
+        assert cfg.embed.model == "text-embedding-3-small"
+        assert cfg.embed.api_base == "https://api.openai.com/v1"
+
     def test_embed_batch_size_min_1(self, tmp_path):
         cfg = _build_config({"embed": {"batch_size": 0}}, tmp_path)
         assert cfg.embed.batch_size == 1
@@ -396,6 +401,8 @@ class TestResolvedApiKey:
     def test_embed_key_falls_back_to_llm(self, tmp_path, monkeypatch):
         cfg = _build_config({}, tmp_path)
         monkeypatch.delenv("SCHOLARAIO_EMBED_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         monkeypatch.setenv("SCHOLARAIO_LLM_API_KEY", "llm-env")
         assert cfg.resolved_embed_api_key() == "llm-env"
 

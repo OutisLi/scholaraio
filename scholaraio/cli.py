@@ -1194,14 +1194,18 @@ def cmd_topics(args: argparse.Namespace, cfg) -> None:
         if args.rebuild and model_dir.exists():
             shutil.rmtree(model_dir, ignore_errors=True)
         ui(f"{'重建' if args.rebuild else '构建'}主题模型...")
-        model = build_topics(
-            cfg.index_db,
-            cfg.papers_dir,
-            min_topic_size=min_ts,
-            nr_topics=_resolve_nr_topics(),
-            save_path=model_dir,
-            cfg=cfg,
-        )
+        try:
+            model = build_topics(
+                cfg.index_db,
+                cfg.papers_dir,
+                min_topic_size=min_ts,
+                nr_topics=_resolve_nr_topics(),
+                save_path=model_dir,
+                cfg=cfg,
+            )
+        except FileNotFoundError as e:
+            _log.error("%s", e)
+            sys.exit(1)
     else:
         try:
             model = load_model(model_dir)
@@ -1374,13 +1378,17 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
 
         if args.build or args.rebuild:
             nr_topics = args.nr_topics
-            info = build_explore_topics(
-                args.name,
-                rebuild=args.rebuild,
-                min_topic_size=args.min_topic_size or 30,
-                nr_topics=nr_topics,
-                cfg=cfg,
-            )
+            try:
+                info = build_explore_topics(
+                    args.name,
+                    rebuild=args.rebuild,
+                    min_topic_size=args.min_topic_size or 30,
+                    nr_topics=nr_topics,
+                    cfg=cfg,
+                )
+            except FileNotFoundError as e:
+                _log.error("%s", e)
+                sys.exit(1)
             ui(f"\n聚类完成: {info['n_topics']} 个主题，{info['n_outliers']} 篇离群论文，{info['n_papers']} 篇论文")
 
         try:

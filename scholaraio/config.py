@@ -685,8 +685,10 @@ def _build_config(data: dict, root: Path) -> Config:
     embed_cache_dir = (
         os.environ.get("SCHOLARAIO_EMBED_CACHE_DIR") or embed_data.get("cache_dir") or "~/.cache/modelscope/hub/models"
     )
-    embed_model = os.environ.get("SCHOLARAIO_EMBED_MODEL") or embed_data.get("model") or "Qwen/Qwen3-Embedding-0.6B"
-    embed_api_base = os.environ.get("SCHOLARAIO_EMBED_API_BASE") or embed_data.get("api_base") or ""
+    default_embed_model = "text-embedding-3-small" if embed_provider == "openai-compat" else "Qwen/Qwen3-Embedding-0.6B"
+    default_embed_api_base = "https://api.openai.com/v1" if embed_provider == "openai-compat" else ""
+    embed_model = os.environ.get("SCHOLARAIO_EMBED_MODEL") or embed_data.get("model") or default_embed_model
+    embed_api_base = os.environ.get("SCHOLARAIO_EMBED_API_BASE") or embed_data.get("api_base") or default_embed_api_base
     embed_api_key = os.environ.get("SCHOLARAIO_EMBED_API_KEY") or embed_data.get("api_key") or ""
     hf_endpoint = (
         os.environ.get("SCHOLARAIO_HF_ENDPOINT") or embed_data.get("hf_endpoint") or os.environ.get("HF_ENDPOINT") or ""
