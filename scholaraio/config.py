@@ -680,7 +680,8 @@ def _build_config(data: dict, root: Path) -> Config:
     )
 
     embed_data = data.get("embed", {}) or {}
-    embed_provider = os.environ.get("SCHOLARAIO_EMBED_PROVIDER") or embed_data.get("provider") or "local"
+    embed_provider = (os.environ.get("SCHOLARAIO_EMBED_PROVIDER") or embed_data.get("provider") or "local").strip()
+    embed_provider = embed_provider.lower() or "local"
     embed_source = os.environ.get("SCHOLARAIO_EMBED_SOURCE") or embed_data.get("source") or "modelscope"
     embed_cache_dir = (
         os.environ.get("SCHOLARAIO_EMBED_CACHE_DIR") or embed_data.get("cache_dir") or "~/.cache/modelscope/hub/models"

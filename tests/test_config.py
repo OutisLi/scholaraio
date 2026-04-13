@@ -271,6 +271,12 @@ class TestBuildConfig:
         assert cfg.embed.model == "text-embedding-3-small"
         assert cfg.embed.api_base == "https://api.openai.com/v1"
 
+    def test_openai_compat_embed_defaults_are_case_insensitive(self, tmp_path):
+        cfg = _build_config({"embed": {"provider": "OpenAI-Compat"}}, tmp_path)
+        assert cfg.embed.provider == "openai-compat"
+        assert cfg.embed.model == "text-embedding-3-small"
+        assert cfg.embed.api_base == "https://api.openai.com/v1"
+
     def test_embed_batch_size_min_1(self, tmp_path):
         cfg = _build_config({"embed": {"batch_size": 0}}, tmp_path)
         assert cfg.embed.batch_size == 1

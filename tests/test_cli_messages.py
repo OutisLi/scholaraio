@@ -769,6 +769,34 @@ class TestTopicCliErrors:
 
         assert any("embed.provider=none" in msg for msg in errors)
 
+    def test_cmd_explore_search_semantic_reports_embedding_disabled_cleanly(self, monkeypatch):
+        errors: list[str] = []
+        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            "scholaraio.explore.explore_vsearch",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                FileNotFoundError("当前 embed.provider=none，已禁用语义向量检索")
+            ),
+        )
+
+        cfg = SimpleNamespace()
+        args = Namespace(
+            explore_action="search",
+            name="demo",
+            query=["turbulence"],
+            mode="semantic",
+            top=5,
+        )
+
+        try:
+            cli.cmd_explore(args, cfg)
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected SystemExit")
+
+        assert any("embed.provider=none" in msg for msg in errors)
+
 
 class TestAttachPdfFallback:
     def test_attach_pdf_falls_back_without_cloud_key(self, tmp_path, monkeypatch):
