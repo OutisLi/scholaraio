@@ -779,10 +779,16 @@ def _append_faiss_files(
         new_ids: New paper IDs.
         new_vecs: Corresponding embedding vectors (already normalised).
     """
-    import faiss
-    import numpy as np
-
     if not index_path.exists() or not ids_path.exists():
+        return
+
+    try:
+        import faiss
+        import numpy as np
+    except ModuleNotFoundError:
+        _log.warning("FAISS 不可用，跳过增量更新并清理旧缓存")
+        index_path.unlink(missing_ok=True)
+        ids_path.unlink(missing_ok=True)
         return
 
     try:

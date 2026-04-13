@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import os
 import sqlite3
 from types import SimpleNamespace
@@ -209,3 +210,34 @@ def test_build_vectors_provider_none_clears_vectors(tmp_papers, tmp_db, tmp_path
 
     assert count == 0
     assert sig == "none"
+
+
+def test_build_vectors_skips_faiss_append_when_cache_missing(tmp_papers, tmp_db, tmp_path, monkeypatch):
+    monkeypatch.setattr(vectors, "_embed_batch", lambda texts, cfg=None: [[0.1, 0.2, 0.3] for _ in texts])
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "faiss":
+            raise ModuleNotFoundError("No module named 'faiss'")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    cfg_local = _build_config(
+        {
+            "embed": {
+                "provider": "local",
+                "model": "local-test-model",
+                "source": "huggingface",
+                "device": "cpu",
+            }
+        },
+        tmp_path,
+    )
+
+    assert vectors.build_vectors(tmp_papers, tmp_db, cfg=cfg_local) == 2
+
+    index_path, ids_path = vectors._faiss_paths(tmp_db)
+    assert not index_path.exists()
+    assert not ids_path.exists()
