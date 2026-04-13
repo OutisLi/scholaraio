@@ -364,9 +364,14 @@ def cmd_embed(args: argparse.Namespace, cfg) -> None:
         _log.error("论文目录不存在: %s", papers_dir)
         sys.exit(1)
 
+    provider = (getattr(cfg.embed, "provider", "local") or "local").strip().lower()
     action = "重建向量索引" if args.rebuild else "更新向量索引"
     ui(f"{action}: {papers_dir} -> {cfg.index_db}")
     count = build_vectors(papers_dir, cfg.index_db, rebuild=args.rebuild, cfg=cfg)
+    if provider == "none":
+        ui("当前 embed.provider=none：已禁用向量生成，系统将使用关键词检索。")
+        ui("如需语义检索，请将 embed.provider 改为 local 或 openai-compat 后重新运行 `scholaraio embed`。")
+        return
     label = "总计" if args.rebuild else "新增"
     ui(f"完成：{label} {count} 条向量。")
     ui("下一步：运行 `scholaraio vsearch <问题>` 或 `scholaraio usearch <问题>` 试试检索效果。")
@@ -1192,14 +1197,18 @@ def cmd_topics(args: argparse.Namespace, cfg) -> None:
         if args.rebuild and model_dir.exists():
             shutil.rmtree(model_dir, ignore_errors=True)
         ui(f"{'重建' if args.rebuild else '构建'}主题模型...")
-        model = build_topics(
-            cfg.index_db,
-            cfg.papers_dir,
-            min_topic_size=min_ts,
-            nr_topics=_resolve_nr_topics(),
-            save_path=model_dir,
-            cfg=cfg,
-        )
+        try:
+            model = build_topics(
+                cfg.index_db,
+                cfg.papers_dir,
+                min_topic_size=min_ts,
+                nr_topics=_resolve_nr_topics(),
+                save_path=model_dir,
+                cfg=cfg,
+            )
+        except FileNotFoundError as e:
+            _log.error("%s", e)
+            sys.exit(1)
     else:
         try:
             model = load_model(model_dir)
@@ -1352,6 +1361,10 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
         except ImportError as e:
             _check_import_error(e)
         n = build_explore_vectors(args.name, rebuild=args.rebuild, cfg=cfg)
+        provider = (getattr(cfg.embed, "provider", "local") or "local").strip().lower()
+        if provider == "none":
+            ui("当前 embed.provider=none：探索库跳过向量生成，仅保留关键词检索。")
+            return
         ui(f"完成: 新增 {n} 条向量嵌入")
 
     elif action == "topics":
@@ -1368,13 +1381,17 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
 
         if args.build or args.rebuild:
             nr_topics = args.nr_topics
-            info = build_explore_topics(
-                args.name,
-                rebuild=args.rebuild,
-                min_topic_size=args.min_topic_size or 30,
-                nr_topics=nr_topics,
-                cfg=cfg,
-            )
+            try:
+                info = build_explore_topics(
+                    args.name,
+                    rebuild=args.rebuild,
+                    min_topic_size=args.min_topic_size or 30,
+                    nr_topics=nr_topics,
+                    cfg=cfg,
+                )
+            except FileNotFoundError as e:
+                _log.error("%s", e)
+                sys.exit(1)
             ui(f"\n聚类完成: {info['n_topics']} 个主题，{info['n_outliers']} 篇离群论文，{info['n_papers']} 篇论文")
 
         try:
@@ -1442,7 +1459,11 @@ def cmd_explore(args: argparse.Namespace, cfg) -> None:
                 from scholaraio.explore import explore_vsearch
             except ImportError as e:
                 _check_import_error(e)
-            results = explore_vsearch(args.name, query, top_k=top_k, cfg=cfg)
+            try:
+                results = explore_vsearch(args.name, query, top_k=top_k, cfg=cfg)
+            except FileNotFoundError as e:
+                _log.error("%s", e)
+                sys.exit(1)
         if not results:
             ui("未找到结果。")
             return
