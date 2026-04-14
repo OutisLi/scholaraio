@@ -120,6 +120,25 @@ class TestScrubSuspects:
 
         assert any(i.paper_id == d.name and i.rule == "suspicious_author" for i in issues)
 
+    def test_flags_scalar_author_metadata_without_crashing(self, tmp_path):
+        d = tmp_path / "Malformed-2024-Network"
+        d.mkdir()
+        (d / "meta.json").write_text(
+            json.dumps(
+                {
+                    "id": "scalar-author",
+                    "title": "Network Scheduling for Training",
+                    "authors": 123,
+                    "first_author_lastname": "",
+                    "year": 2024,
+                }
+            )
+        )
+
+        issues = list_scrub_suspects(tmp_path)
+
+        assert any(i.paper_id == d.name and i.rule == "suspicious_author" for i in issues)
+
     def test_flags_missing_year(self, tmp_path):
         d = tmp_path / "Contributor-XXXX-Distributed-Systems"
         d.mkdir()

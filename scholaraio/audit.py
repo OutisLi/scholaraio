@@ -169,18 +169,25 @@ def _is_placeholder_title(title: str) -> bool:
     return normalized in _PLACEHOLDER_TITLES
 
 
-def _has_suspicious_author(authors: list[str], first_author_lastname: str) -> bool:
-    if not authors:
+def _has_suspicious_author(authors: object, first_author_lastname: object) -> bool:
+    if isinstance(authors, str):
+        author_values = [authors]
+    elif isinstance(authors, (list, tuple, set)):
+        author_values = [str(author) for author in authors]
+    else:
+        author_values = []
+
+    if not author_values:
         return True
-    if not first_author_lastname:
+    if not isinstance(first_author_lastname, str) or not first_author_lastname.strip():
         return True
 
     normalized_lastname = first_author_lastname.strip().lower()
     if normalized_lastname in _SUSPICIOUS_AUTHOR_VALUES:
         return True
 
-    for author in authors:
-        normalized = str(author).strip().lower()
+    for author in author_values:
+        normalized = author.strip().lower()
         if not normalized:
             return True
         if normalized in _SUSPICIOUS_AUTHOR_VALUES:
