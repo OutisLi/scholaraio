@@ -717,6 +717,16 @@ def _embed_batch(texts: list[str], cfg: Config | None = None) -> list[list[float
     raise ValueError(f"未知 embedding provider: {provider}")
 
 
+def _embed_query_vector(query: str, cfg: Config | None = None):
+    """Embed and L2-normalize a single query before touching FAISS."""
+    import numpy as np
+
+    q_vec = np.array([_embed_text(query, cfg)], dtype="float32")
+    norms = np.linalg.norm(q_vec, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return q_vec / norms
+
+
 class QwenEmbedder:
     """BERTopic-compatible embedder wrapping the configured embedding backend.
 
@@ -1028,7 +1038,7 @@ def _build_faiss_index(db_path: Path) -> tuple[faiss.Index, list[str]]:
 
 
 def _vsearch_faiss(
-    query: str,
+    query: str | object,
     index: faiss.Index,
     paper_ids: list[str],
     top_k: int,
@@ -1046,14 +1056,10 @@ def _vsearch_faiss(
     Returns:
         List of ``(paper_id, score)`` sorted by descending similarity.
     """
-    import faiss
-    import numpy as np
-
     if _embed_provider(cfg) == "none":
         raise FileNotFoundError("当前 embed.provider=none，已禁用语义向量检索")
 
-    q_vec = np.array([_embed_text(query, cfg)], dtype="float32")
-    faiss.normalize_L2(q_vec)
+    q_vec = _embed_query_vector(query, cfg) if isinstance(query, str) else query
 
     fetch_k = min(top_k, index.ntotal)
     scores, indices = index.search(q_vec, fetch_k)
@@ -1099,9 +1105,6 @@ def vsearch(
     Raises:
         FileNotFoundError: 索引文件或 ``paper_vectors`` 表不存在。
     """
-    import faiss
-    import numpy as np
-
     if _embed_provider(cfg) == "none":
         raise FileNotFoundError("当前 embed.provider=none，已禁用语义向量检索")
 
@@ -1121,10 +1124,9 @@ def vsearch(
     finally:
         conn.close()
 
+    # Load the embedding model before FAISS to avoid known faiss/torch crashes on macOS.
+    q_vec = _embed_query_vector(query, cfg)
     index, faiss_ids = _build_faiss_index(db_path)
-
-    q_vec = np.array([_embed_text(query, cfg)], dtype="float32")
-    faiss.normalize_L2(q_vec)
 
     # Fetch more candidates when post-filtering is needed
     fetch_k = top_k * 5 if (year or journal or paper_type or paper_ids) else top_k

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **macOS semantic-search smoke workflow**: Added a dedicated GitHub Actions job on `macos-14` to exercise the `sentence-transformers` -> `faiss-cpu` semantic-search stack and run targeted regression tests for vector-search paths
+
+### Fixed
+
+- **macOS semantic/unified search crash** ([#65](https://github.com/ZimoLiao/scholaraio/issues/65)): main-library and explore semantic search now embed and normalize the query before loading or searching FAISS indexes, avoiding a known `faiss` / `sentence-transformers` import-order segfault pattern on macOS while preserving existing ranking behavior
+
 ## [1.3.1] — 2026-04-14
 
 ### Added

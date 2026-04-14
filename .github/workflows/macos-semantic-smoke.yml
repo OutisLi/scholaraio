@@ -1,0 +1,80 @@
+name: macOS Semantic Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - ".github/workflows/macos-semantic-smoke.yml"
+      - "pyproject.toml"
+      - "scholaraio/cli.py"
+      - "scholaraio/explore.py"
+      - "scholaraio/index.py"
+      - "scholaraio/vectors.py"
+      - "tests/test_cli_messages.py"
+      - "tests/test_index.py"
+      - "tests/test_vectors.py"
+  push:
+    branches: [main, master]
+    paths:
+      - ".github/workflows/macos-semantic-smoke.yml"
+      - "pyproject.toml"
+      - "scholaraio/cli.py"
+      - "scholaraio/explore.py"
+      - "scholaraio/index.py"
+      - "scholaraio/vectors.py"
+      - "tests/test_cli_messages.py"
+      - "tests/test_index.py"
+      - "tests/test_vectors.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-semantic-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-smoke:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install semantic-search dependencies
+        run: pip install -e ".[dev,embed]"
+
+      - name: Smoke test safe sentence-transformers -> faiss order
+        env:
+          HF_HUB_DISABLE_TELEMETRY: "1"
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          python - <<'PY'
+          from sentence_transformers import SentenceTransformer
+
+          model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+          vector = model.encode(["boundary layer turbulence"], normalize_embeddings=True).astype("float32")
+
+          import faiss
+
+          index = faiss.IndexFlatIP(vector.shape[1])
+          index.add(vector)
+          scores, ids = index.search(vector, 1)
+
+          assert ids[0][0] == 0
+          assert float(scores[0][0]) > 0.99
+          print(f"macOS semantic smoke passed with dim={vector.shape[1]} score={float(scores[0][0]):.4f}")
+          PY
+
+      - name: Run semantic-search regression tests
+        run: >
+          python -m pytest -q -p no:cacheprovider
+          tests/test_vectors.py
+          tests/test_index.py
+          tests/test_cli_messages.py
+          -k "embeds_query_before_loading_faiss_index or unified_search or explore_search_semantic_reports_embedding_disabled_cleanly"

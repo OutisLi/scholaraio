@@ -700,10 +700,12 @@ def explore_vsearch(name: str, query: str, *, top_k: int = 10, cfg: Config | Non
     Returns:
         论文列表，按 cosine similarity 降序。
     """
-    from scholaraio.vectors import _vsearch_faiss
+    from scholaraio.vectors import _embed_query_vector, _vsearch_faiss
 
+    # Prepare the query embedding before FAISS import/load to avoid macOS crashes.
+    q_vec = _embed_query_vector(query, cfg)
     index, paper_ids = _build_faiss_index(name, cfg)
-    hits = _vsearch_faiss(query, index, paper_ids, top_k, cfg=cfg)
+    hits = _vsearch_faiss(q_vec, index, paper_ids, top_k, cfg=cfg)
 
     paper_map = {}
     for p in iter_papers(name, cfg):
