@@ -92,6 +92,7 @@ scholaraio backup
 - `document` provides Office-document utilities such as inspection.
 - `style` manages citation styles.
 - `backup` lists configured rsync targets and runs a named backup plan.
+- `backup run` is intentionally non-interactive: SSH is launched with `BatchMode=yes`, so key-based auth and host trust must already be prepared.
 
 ## Audit, Setup, And Runtime Inspection
 

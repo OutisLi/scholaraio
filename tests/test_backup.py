@@ -56,6 +56,7 @@ def test_build_rsync_command_uses_configured_target_and_flags(tmp_path: Path):
     ssh_cmd = cmd[cmd.index("-e") + 1]
     assert "ssh" in ssh_cmd
     assert "-p 2222" in ssh_cmd
+    assert "-o BatchMode=yes" in ssh_cmd
     assert f"-i {(tmp_path / 'secrets' / 'id_ed25519').resolve()}" in ssh_cmd
 
 

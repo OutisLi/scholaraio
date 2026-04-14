@@ -66,6 +66,7 @@ embed:
 ### Backup Targets
 
 ScholarAIO can sync its `data/` directory to a remote machine through `rsync`.
+`scholaraio backup run` always invokes SSH in batch mode (`-o BatchMode=yes`), so password prompts and host-key confirmation prompts are intentionally disabled.
 
 ```yaml
 backup:
@@ -89,3 +90,4 @@ backup:
 - Use `default` for the full ScholarAIO `data/` tree, especially when it includes mutable files such as SQLite databases.
 - Reserve `append` / `append-verify` for append-only artifacts where the remote copy is expected to be a prefix of the local file.
 - Keep host-specific secrets such as `identity_file` in `config.local.yaml` when possible.
+- Prepare SSH key-based authentication and the target host's `known_hosts` entry ahead of time; otherwise `backup run` will fail fast instead of waiting for interactive input.

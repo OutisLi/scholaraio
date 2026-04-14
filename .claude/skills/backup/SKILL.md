@@ -63,6 +63,7 @@ backup:
 - 主机相关或敏感项优先放 `config.local.yaml`
 - 备份整棵 `data/` 目录时优先使用 `default`
 - 只有在明确备份对象是追加型文件时，才考虑 `append` / `append-verify`
+- `scholaraio backup run` 会强制使用非交互 SSH（`BatchMode=yes`），所以要提前准备好密钥登录和 `known_hosts`
 
 ## Agent 行为规范
 
@@ -70,6 +71,7 @@ backup:
 2. 首次执行某个目标，优先建议用户先做 `--dry-run`
 3. 如果用户明确要求立即备份，再执行真实同步
 4. 如果 CLI 返回非零退出码，向用户转述 rsync/ssh 失败信息，不要自己编造原因
+5. 遇到认证失败或 host key 未预置信任时，优先提醒用户去更新 `config.local.yaml` / SSH 配置，而不是要求用户在 CLI 里临时输入参数
 
 ## 何时不用这个 skill
 

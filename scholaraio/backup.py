@@ -47,7 +47,8 @@ def _resolve_identity_file(cfg: Config, identity_file: str) -> str:
 
 
 def _build_remote_shell(cfg: Config, target: BackupTargetConfig) -> str:
-    parts = [cfg.backup.ssh_bin]
+    # Backups should fail fast instead of hanging on interactive SSH prompts.
+    parts = [cfg.backup.ssh_bin, "-o", "BatchMode=yes"]
     if target.port and target.port != 22:
         parts.extend(["-p", str(target.port)])
     identity_file = _resolve_identity_file(cfg, target.identity_file)

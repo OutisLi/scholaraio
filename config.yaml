@@ -111,7 +111,7 @@ translate:
 backup:
   source_dir: data # Local directory to sync 本地备份源目录（默认整个 data）
   rsync_bin: rsync # rsync executable 可执行文件名或绝对路径
-  ssh_bin: ssh # ssh executable 可执行文件名或绝对路径
+  ssh_bin: ssh # ssh executable 可执行文件名或绝对路径；backup run 会强制追加 -o BatchMode=yes
   targets: {}
   # targets:
   #   lab:
@@ -124,6 +124,7 @@ backup:
   #     compress: true
   #     enabled: true
   #     exclude: ["*.tmp", "metrics.db"]
+  # Prepare SSH keys and known_hosts ahead of time; backup run is non-interactive.
 
 # Zotero integration Zotero 集成
 zotero:
