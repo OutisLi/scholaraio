@@ -1,7 +1,7 @@
 ---
 name: scrub
 description: Incrementally scrub low-quality paper metadata after enrich. Repairs bad titles, suspicious authors, and missing years, skips already reviewed papers via `.scrubbed`, then normalizes names and rebuilds indexes.
-version: 1.0.0
+version: 1.0.1
 author: ZimoLiao/scholaraio
 license: MIT
 tags: ["academic", "metadata", "cleanup", "data-quality", "repair"]
@@ -35,14 +35,16 @@ Do not use this skill for:
 
 Skip papers that already contain `.scrubbed`.
 
-You can list suspicious, unreviewed papers with a Python helper:
+You can list suspicious, unreviewed papers with a Python helper that resolves `papers_dir` from the active ScholarAIO config:
 
 ```bash
 python - <<'PY'
-from pathlib import Path
 from scholaraio.audit import list_scrub_suspects
+from scholaraio.config import load_config
 
-for issue in list_scrub_suspects(Path("data/papers")):
+cfg = load_config()
+
+for issue in list_scrub_suspects(cfg.papers_dir):
     print(f"{issue.paper_id}\t{issue.rule}\t{issue.message}")
 PY
 ```
@@ -69,10 +71,22 @@ scholaraio show "<paper-id>" --layer 1
 Then read the source text as needed:
 
 ```bash
-sed -n '1,160p' "data/papers/<paper-id>/paper.md"
+scholaraio show "<paper-id>" --layer 4
 ```
 
-If the head of the file is insufficient, inspect a larger section or search relevant phrases in `paper.md`.
+If the default view is too long, resolve the actual `paper.md` path from config first and then inspect only the needed slice:
+
+```bash
+python - <<'PY'
+from scholaraio.config import load_config
+
+paper_id = "<paper-id>"
+cfg = load_config()
+print((cfg.papers_dir / paper_id / "paper.md").resolve())
+PY
+```
+
+If the head of the file is insufficient, inspect a larger section or search relevant phrases in the resolved `paper.md`.
 
 Focus on extracting only the identity-critical metadata needed to make the paper usable:
 
@@ -103,15 +117,35 @@ Decision policy:
 - Do not fabricate DOI, journal, or venue.
 - If author or year cannot be confirmed reliably, leave them unresolved rather than guessing.
 
-### 4. Normalize directory names
+### 4. Handle directory renames correctly
 
-If the repair changed identity fields, normalize the directory name:
+`scholaraio repair` already rewrites `meta.json` and renames the paper directory immediately when title, author, or year changes.
+
+That means the original `<paper-id>` may stop existing right after the real repair. Before marking the paper, resolve the current paper id from the updated metadata:
 
 ```bash
-scholaraio rename "<paper-id>"
+python - <<'PY'
+import json
+from scholaraio.config import load_config
+from scholaraio.papers import iter_paper_dirs
+
+title = "Correct Title"
+cfg = load_config()
+
+for pdir in iter_paper_dirs(cfg.papers_dir):
+    meta_path = pdir / "meta.json"
+    if not meta_path.exists():
+        continue
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    if meta.get("title") == title:
+        print(pdir.name)
+        break
+else:
+    raise SystemExit(f"could not resolve paper id for title: {title}")
+PY
 ```
 
-For a batch after several repairs:
+If you repaired several papers, or edited `meta.json` outside `repair`, normalize names once at the end:
 
 ```bash
 scholaraio rename --all
@@ -124,7 +158,15 @@ Because rename may change the directory path, always create the marker using the
 Once a paper has been reviewed and is acceptable for current library use, create the marker:
 
 ```bash
-touch "data/papers/<Author-Year-Title>/.scrubbed"
+python - <<'PY'
+from scholaraio.config import load_config
+from scholaraio.papers import mark_scrubbed
+
+paper_id = "<Author-Year-Title>"
+cfg = load_config()
+mark_scrubbed(cfg.papers_dir / paper_id)
+print(f"marked {paper_id} as scrubbed")
+PY
 ```
 
 Only mark a paper when:
