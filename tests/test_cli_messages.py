@@ -195,6 +195,30 @@ class TestRepairIdentifierResolution:
         assert repaired_meta["id"] == "aaaa-1111"
         assert repaired_meta["title"] == "Updated Turbulence Title"
 
+    def test_repair_accepts_direct_dir_when_meta_json_is_missing(self, tmp_papers, tmp_path):
+        paper_dir = tmp_papers / "Broken-2023-Turbulence"
+        paper_dir.mkdir()
+        (paper_dir / "paper.md").write_text("# Broken metadata\n\nFull text here.", encoding="utf-8")
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_path / "missing-index.db")
+        args = Namespace(
+            paper_id="Broken-2023-Turbulence",
+            title="Recovered Turbulence Title",
+            doi="",
+            author="John Smith",
+            year=2023,
+            no_api=True,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Recovered-Turbulence-Title"
+        assert repaired_dir.exists()
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+        assert repaired_meta["title"] == "Recovered Turbulence Title"
+        assert (repaired_dir / "paper.md").exists()
+
 
 class TestShowNotesIntegration:
     def test_notes_displayed_after_header(self, tmp_papers, monkeypatch):

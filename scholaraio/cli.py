@@ -484,7 +484,11 @@ def cmd_repair(args: argparse.Namespace, cfg) -> None:
     )
 
     papers_dir = cfg.papers_dir
-    paper_d = _resolve_paper(args.paper_id, cfg)
+    direct_dir = papers_dir / args.paper_id
+    if direct_dir.is_dir():
+        paper_d = direct_dir
+    else:
+        paper_d = _resolve_paper(args.paper_id, cfg)
     paper_id = paper_d.name
     md_path = paper_d / "paper.md"
     json_path = paper_d / "meta.json"
