@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Rsync backup workflow** ([#54](https://github.com/ZimoLiao/scholaraio/issues/54)): Added typed `backup` configuration, the `scholaraio.backup` module, `scholaraio backup list/run`, and the `backup` skill so ScholarAIO data can be synced to named remote targets through rsync instead of hand-written shell commands
+
+### Fixed
+
+- **Backup runtime robustness**: `scholaraio backup run` now reports missing `rsync` executables as controlled CLI errors, shell-quotes the displayed rsync command preview, and defaults full-data backups to the safer `default` rsync mode instead of append-only behavior
+
 ## [1.3.1] — 2026-04-14
 
 ### Added
