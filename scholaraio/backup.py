@@ -86,7 +86,11 @@ def build_rsync_command(cfg: Config, target_name: str, *, dry_run: bool = False)
 def run_backup(cfg: Config, target_name: str, *, dry_run: bool = False) -> BackupRunResult:
     """Run an rsync backup for a configured target."""
     cmd = build_rsync_command(cfg, target_name, dry_run=dry_run)
-    completed = subprocess.run(cmd, check=False, text=True, capture_output=True)
+    try:
+        completed = subprocess.run(cmd, check=False, text=True, capture_output=True)
+    except OSError as exc:
+        detail = exc.strerror or str(exc)
+        raise BackupConfigError(f"failed to execute rsync {cmd[0]!r}: {detail}") from exc
     return BackupRunResult(
         command=cmd,
         returncode=completed.returncode,

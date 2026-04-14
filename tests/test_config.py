@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from scholaraio.config import _build_config, _deep_merge, load_config
 
@@ -200,6 +201,10 @@ class TestBuildConfig:
         assert target.compress is False
         assert target.enabled is True
         assert target.exclude == ["*.tmp", "metrics.db"]
+
+    def test_backup_source_dir_expands_user_home(self, tmp_path):
+        cfg = _build_config({"backup": {"source_dir": "~/scholaraio-backup-source"}}, tmp_path)
+        assert cfg.backup_source_dir == Path("~/scholaraio-backup-source").expanduser().resolve()
 
     def test_zotero_library_type_default_and_override(self, tmp_path):
         cfg = _build_config({}, tmp_path)

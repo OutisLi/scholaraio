@@ -2568,13 +2568,13 @@ def cmd_backup(args: argparse.Namespace, cfg) -> None:
     if action == "run":
         try:
             cmd = build_rsync_command(cfg, args.target, dry_run=args.dry_run)
+            ui("即将执行备份命令：")
+            ui("  " + " ".join(cmd))
+            result = run_backup(cfg, args.target, dry_run=args.dry_run)
         except BackupConfigError as exc:
             _log.error("%s", exc)
             sys.exit(1)
 
-        ui("即将执行备份命令：")
-        ui("  " + " ".join(cmd))
-        result = run_backup(cfg, args.target, dry_run=args.dry_run)
         if result.stdout.strip():
             ui()
             ui(result.stdout.rstrip())

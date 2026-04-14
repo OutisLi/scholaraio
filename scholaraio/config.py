@@ -378,7 +378,10 @@ class Config:
     @property
     def backup_source_dir(self) -> Path:
         """备份源目录的绝对路径。"""
-        return (self._root / self.backup.source_dir).resolve()
+        path = Path(self.backup.source_dir).expanduser()
+        if not path.is_absolute():
+            path = self._root / path
+        return path.resolve()
 
     def ensure_dirs(self) -> None:
         """创建运行所需的目录（data/papers, data/inbox, data/pending, workspace 等）。"""

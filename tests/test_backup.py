@@ -112,6 +112,20 @@ def test_run_backup_invokes_subprocess_with_planned_command(tmp_path: Path, monk
     assert seen
 
 
+def test_run_backup_reports_missing_rsync_binary_as_config_error(tmp_path: Path, monkeypatch):
+    from scholaraio.backup import BackupConfigError, run_backup
+
+    cfg = _build_backup_cfg(tmp_path)
+
+    def fake_run(*_args, **_kwargs):
+        raise FileNotFoundError("rsync not found")
+
+    monkeypatch.setattr("scholaraio.backup.subprocess.run", fake_run)
+
+    with pytest.raises(BackupConfigError, match="failed to execute rsync"):
+        run_backup(cfg, "lab", dry_run=False)
+
+
 def test_cmd_backup_list_displays_configured_targets(tmp_path: Path, monkeypatch):
     cfg = _build_backup_cfg(tmp_path)
     messages: list[str] = []
@@ -140,3 +154,26 @@ def test_cmd_backup_run_reports_dry_run_completion(tmp_path: Path, monkeypatch):
 
     assert any("即将执行备份命令" in msg for msg in messages)
     assert any("预演完成" in msg for msg in messages)
+
+
+def test_cmd_backup_run_exits_cleanly_when_backup_runtime_error_occurs(tmp_path: Path, monkeypatch):
+    from scholaraio.backup import BackupConfigError
+
+    messages: list[str] = []
+    errors: list[str] = []
+    monkeypatch.setattr(cli, "ui", lambda msg="": messages.append(msg))
+    monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+    monkeypatch.setattr(
+        "scholaraio.backup.build_rsync_command",
+        lambda *_args, **_kwargs: ["missing-rsync", "-a", "/src/", "alice@host:/dst/"],
+    )
+    monkeypatch.setattr(
+        "scholaraio.backup.run_backup",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(BackupConfigError("failed to execute rsync")),
+    )
+
+    with pytest.raises(SystemExit, match="1"):
+        cli.cmd_backup(Namespace(backup_action="run", target="lab", dry_run=False), _build_backup_cfg(tmp_path))
+
+    assert any("即将执行备份命令" in msg for msg in messages)
+    assert any("failed to execute rsync" in msg for msg in errors)
