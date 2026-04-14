@@ -727,6 +727,30 @@ def _embed_query_vector(query: str, cfg: Config | None = None):
     return q_vec / norms
 
 
+def _ensure_vector_search_ready(
+    db_path: Path,
+    *,
+    missing_table_msg: str,
+    empty_msg: str,
+    table_name: str = "paper_vectors",
+) -> None:
+    """Verify the vector table exists and has at least one row before embedding queries."""
+    conn = sqlite3.connect(db_path)
+    try:
+        has_vectors = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,),
+        ).fetchone()
+        if not has_vectors:
+            raise FileNotFoundError(missing_table_msg)
+
+        has_rows = conn.execute(f"SELECT 1 FROM {table_name} LIMIT 1").fetchone()
+        if not has_rows:
+            raise FileNotFoundError(empty_msg)
+    finally:
+        conn.close()
+
+
 class QwenEmbedder:
     """BERTopic-compatible embedder wrapping the configured embedding backend.
 
@@ -1114,15 +1138,11 @@ def vsearch(
     if not db_path.exists():
         raise FileNotFoundError(f"索引文件不存在：{db_path}\n请先运行 `scholaraio index`")
 
-    conn = sqlite3.connect(db_path)
-    try:
-        has_vectors = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='paper_vectors'"
-        ).fetchone()
-        if not has_vectors:
-            raise FileNotFoundError("向量索引不存在，请先运行 `scholaraio embed`")
-    finally:
-        conn.close()
+    _ensure_vector_search_ready(
+        db_path,
+        missing_table_msg="向量索引不存在，请先运行 `scholaraio embed`",
+        empty_msg="向量索引为空，请先运行 `scholaraio embed`",
+    )
 
     # Load the embedding model before FAISS to avoid known faiss/torch crashes on macOS.
     q_vec = _embed_query_vector(query, cfg)

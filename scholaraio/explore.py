@@ -700,8 +700,14 @@ def explore_vsearch(name: str, query: str, *, top_k: int = 10, cfg: Config | Non
     Returns:
         论文列表，按 cosine similarity 降序。
     """
-    from scholaraio.vectors import _embed_query_vector, _vsearch_faiss
+    from scholaraio.vectors import _embed_query_vector, _ensure_vector_search_ready, _vsearch_faiss
 
+    db_path = _db_path(name, cfg)
+    _ensure_vector_search_ready(
+        db_path,
+        missing_table_msg=f"向量库为空: {db_path}",
+        empty_msg=f"向量库为空: {db_path}",
+    )
     # Prepare the query embedding before FAISS import/load to avoid macOS crashes.
     q_vec = _embed_query_vector(query, cfg)
     index, paper_ids = _build_faiss_index(name, cfg)
