@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from scholaraio.config import BackupTargetConfig, Config
 
@@ -47,14 +50,53 @@ def _resolve_identity_file(cfg: Config, identity_file: str) -> str:
 
 
 def _build_remote_shell(cfg: Config, target: BackupTargetConfig) -> str:
-    # Backups should fail fast instead of hanging on interactive SSH prompts.
-    parts = [cfg.backup.ssh_bin, "-o", "BatchMode=yes"]
+    parts = [cfg.backup.ssh_bin]
+    if target.password:
+        parts.extend(
+            [
+                "-o",
+                "PreferredAuthentications=password,keyboard-interactive",
+                "-o",
+                "PubkeyAuthentication=no",
+            ]
+        )
+    else:
+        # Backups should fail fast instead of hanging on interactive SSH prompts.
+        parts.extend(["-o", "BatchMode=yes"])
     if target.port and target.port != 22:
         parts.extend(["-p", str(target.port)])
     identity_file = _resolve_identity_file(cfg, target.identity_file)
     if identity_file:
         parts.extend(["-i", identity_file])
     return shlex.join(parts)
+
+
+def _build_password_env(target: BackupTargetConfig) -> tuple[dict[str, str], str] | tuple[None, None]:
+    if not target.password:
+        return None, None
+
+    fd, askpass_path = tempfile.mkstemp(prefix="scholaraio-backup-askpass-", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("#!/bin/sh\nprintf '%s\\n' \"$SCHOLARAIO_BACKUP_SSH_PASSWORD\"\n")
+        os.chmod(askpass_path, 0o700)
+    except Exception:
+        try:
+            os.unlink(askpass_path)
+        except OSError:
+            pass
+        raise
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "SCHOLARAIO_BACKUP_SSH_PASSWORD": target.password,
+            "SSH_ASKPASS": askpass_path,
+            "SSH_ASKPASS_REQUIRE": "force",
+            "DISPLAY": "scholaraio-backup",
+        }
+    )
+    return env, askpass_path
 
 
 def _destination_for(target: BackupTargetConfig) -> str:
@@ -86,12 +128,24 @@ def build_rsync_command(cfg: Config, target_name: str, *, dry_run: bool = False)
 
 def run_backup(cfg: Config, target_name: str, *, dry_run: bool = False) -> BackupRunResult:
     """Run an rsync backup for a configured target."""
+    target = _resolve_target(cfg, target_name)
     cmd = build_rsync_command(cfg, target_name, dry_run=dry_run)
+    env, askpass_path = _build_password_env(target)
+    run_kwargs: dict[str, Any] = {"check": False, "text": True, "capture_output": True}
+    if env is not None:
+        run_kwargs["env"] = env
+        run_kwargs["stdin"] = subprocess.DEVNULL
     try:
-        completed = subprocess.run(cmd, check=False, text=True, capture_output=True)
+        completed = subprocess.run(cmd, **run_kwargs)
     except OSError as exc:
         detail = exc.strerror or str(exc)
         raise BackupConfigError(f"failed to execute rsync {cmd[0]!r}: {detail}") from exc
+    finally:
+        if askpass_path:
+            try:
+                os.unlink(askpass_path)
+            except OSError:
+                pass
     return BackupRunResult(
         command=cmd,
         returncode=completed.returncode,

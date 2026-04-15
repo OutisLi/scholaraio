@@ -280,6 +280,7 @@ class BackupTargetConfig:
         path: Remote destination path.
         port: SSH port.
         identity_file: Optional SSH identity file path.
+        password: Optional SSH password for non-interactive backup flows.
         mode: Transfer mode, ``"default"`` | ``"append"`` | ``"append-verify"``.
         compress: Whether to enable rsync compression.
         enabled: Whether the target is available for use.
@@ -291,6 +292,7 @@ class BackupTargetConfig:
     path: str = ""
     port: int = 22
     identity_file: str = ""
+    password: str = ""
     mode: str = "default"
     compress: bool = True
     enabled: bool = True
@@ -817,6 +819,7 @@ def _build_config(data: dict, root: Path) -> Config:
                     field_name=f"backup.targets.{name}.port",
                 ),
                 identity_file=str(target_data.get("identity_file") or "").strip(),
+                password=str(target_data.get("password") or "").strip(),
                 mode=_normalize_choice(
                     target_data.get("mode", "default"),
                     default="default",

@@ -195,6 +195,7 @@ class TestBuildConfig:
                             "path": "/srv/scholaraio",
                             "port": 2222,
                             "identity_file": "keys/id_ed25519",
+                            "password": "secret",
                             "mode": "Append-Verify",
                             "compress": "false",
                             "enabled": "true",
@@ -214,6 +215,7 @@ class TestBuildConfig:
         assert target.path == "/srv/scholaraio"
         assert target.port == 2222
         assert target.identity_file == "keys/id_ed25519"
+        assert target.password == "secret"
         assert target.mode == "append-verify"
         assert target.compress is False
         assert target.enabled is True

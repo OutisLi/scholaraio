@@ -120,11 +120,12 @@ backup:
   #     path: /srv/scholaraio
   #     port: 22
   #     identity_file: ~/.ssh/id_ed25519 # Prefer placing secrets/host-specific overrides in config.local.yaml
+  #     password: "" # Optional fallback for password-only hosts; keep it only in config.local.yaml
   #     mode: default # default | append | append-verify
   #     compress: true
   #     enabled: true
   #     exclude: ["*.tmp", "metrics.db"]
-  # Prepare SSH keys and known_hosts ahead of time; backup run is non-interactive.
+  # Prepare SSH keys or a config.local.yaml password override, plus known_hosts; backup run is non-interactive.
 
 # Zotero integration Zotero 集成
 zotero:

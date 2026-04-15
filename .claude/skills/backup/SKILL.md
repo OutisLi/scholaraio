@@ -64,6 +64,8 @@ backup:
 - 备份整棵 `data/` 目录时优先使用 `default`
 - 只有在明确备份对象是追加型文件时，才考虑 `append` / `append-verify`
 - `scholaraio backup run` 会强制使用非交互 SSH（`BatchMode=yes`），所以要提前准备好密钥登录和 `known_hosts`
+- 如果远端只接受密码，可以只在 `config.local.yaml` 里为该 target 写 `password`；ScholarAIO 会自动切到内部 askpass 路径
+- 可直接引导用户执行：`ssh-keyscan -p <port> <host> >> ~/.ssh/known_hosts`，再执行：`ssh -i <identity_file> -p <port> <user>@<host> true`
 
 ## Agent 行为规范
 
