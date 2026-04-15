@@ -270,6 +270,18 @@ class ZoteroConfig:
 
 
 @dataclass
+class PatentConfig:
+    """专利搜索配置。
+
+    Attributes:
+        uspto_odp_api_key: USPTO Open Data Portal API Key。
+            注册地址: https://data.uspto.gov/apis/getting-started
+    """
+
+    uspto_odp_api_key: str = ""
+
+
+@dataclass
 class Config:
     """ScholarAIO 全局配置，由 :func:`load_config` 构建。
 
@@ -283,6 +295,7 @@ class Config:
         log: 日志与指标配置。
         translate: 自动翻译配置。
         zotero: Zotero 集成配置。
+        patent: 专利搜索配置。
     """
 
     paths: PathsConfig = field(default_factory=PathsConfig)
@@ -294,6 +307,7 @@ class Config:
     log: LogConfig = field(default_factory=LogConfig)
     translate: TranslateConfig = field(default_factory=TranslateConfig)
     zotero: ZoteroConfig = field(default_factory=ZoteroConfig)
+    patent: PatentConfig = field(default_factory=PatentConfig)
 
     # Root directory of the config file (used to resolve relative paths)
     _root: Path = field(default_factory=Path.cwd, repr=False, compare=False)
@@ -412,6 +426,18 @@ class Config:
         if self.ingest.mineru_api_key:
             return self.ingest.mineru_api_key
         return os.environ.get("MINERU_TOKEN", "") or os.environ.get("MINERU_API_KEY", "")
+
+    def resolved_uspto_odp_api_key(self) -> str:
+        """按优先级查找 USPTO ODP API key。
+
+        查找顺序: config ``patent.uspto_odp_api_key`` → 环境变量 ``USPTO_ODP_API_KEY``。
+
+        Returns:
+            API key 字符串，未找到则返回空字符串。
+        """
+        if self.patent.uspto_odp_api_key:
+            return self.patent.uspto_odp_api_key
+        return os.environ.get("USPTO_ODP_API_KEY", "")
 
     def resolved_s2_api_key(self) -> str:
         """按优先级查找 Semantic Scholar API key。
