@@ -396,7 +396,7 @@ def extract_web(
     if include_html:
         body["include_html"] = include_html
 
-    api_key = _get_webextract_api_key(cfg)
+    api_key = _get_webextract_api_key(cfg) or ""
     req = Request(
         f"{base_url}/extract",
         data=json.dumps(body).encode("utf-8"),
