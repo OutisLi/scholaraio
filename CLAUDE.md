@@ -48,6 +48,7 @@ The right mental model is to treat skills as "reusable workflows": when the user
 Knowledge base management:
 - `search` - When the user wants to find papers, search authors, or run keyword / semantic / hybrid retrieval, start with this skill.
 - `arxiv` - When the user wants to browse arXiv preprints, search arXiv directly, or fetch a preprint PDF into inbox or ingest, use this skill.
+- `ingest-link` - When the user wants to ingest one or more rendered web URLs or online PDFs into the library through `qt-web-extractor`, use this skill.
 - `show` - When the user wants to read paper metadata, abstract, conclusion, or full text, use this skill for progressive L1-L4 loading.
 - `enrich` - When the user wants to add TOC, conclusion, abstract, citation counts, or other enrichment fields, use this skill.
 - `ingest` - When the user wants to process inbox items, ingest PDF / Office / Markdown files, and rebuild indexes, use this skill.
@@ -62,15 +63,19 @@ Knowledge base management:
 - `import` - When the user wants to bring in Endnote, Zotero, or existing PDFs, use this skill.
 - `rename` - When the user wants to normalize paper directory names, use this skill.
 - `audit` - When the user wants to inspect data quality, find missing fields or duplicates, or batch-repair metadata, use this skill.
+- `scrub` - When the user wants to incrementally review and repair low-quality metadata after enrich, especially for non-standard documents, use this skill.
 - `translate` - When the user wants to translate papers into a target language while keeping Markdown structure, use this skill.
 
 Academic writing:
+- `academic-writing` - When the user needs help choosing or organizing the right academic-writing workflow by deliverable or final format (review, paper section, rebuttal, PPT, poster, technical report), use this skill as the router.
 - `literature-review` - When the user wants to write a literature review, organize topics, and build a critical narrative, use this skill.
 - `paper-writing` - When the user wants to draft concrete paper sections rather than a generic summary, use this skill.
 - `citation-check` - When the user is worried about fake citations, wrong author-year pairs, or AI citation hallucinations, use this skill.
 - `writing-polish` - When the user wants academic polishing, de-AI-fication, or style transfer, use this skill.
 - `review-response` - When the user wants to answer reviewer comments, write a rebuttal, or prepare a point-by-point response, use this skill.
 - `research-gap` - When the user wants to identify research gaps and open questions from existing literature, use this skill.
+- `technical-report` - When the user wants a technical report, topic report, or research briefing and needs help organizing scope, evidence, recommendations, and packaging, use this skill.
+- `poster` - When the user wants an academic poster or poster-style visual summary and needs help structuring sections, balancing text and figures, and packaging the result, use this skill.
 
 Visualization and document generation:
 - `draw` - When the user wants to visualize a process, structure, timeline, or concept relationships, use this skill.
@@ -78,6 +83,7 @@ Visualization and document generation:
 
 System operations:
 - `setup` - When the user wants to install, configure, or diagnose the ScholarAIO environment, start with this skill.
+- `backup` - When the user wants to sync ScholarAIO data to a configured remote machine via rsync, use this skill.
 - `metrics` - When the user wants token usage, call timing, or runtime metrics, use this skill.
 
 Scientific computing:
@@ -178,7 +184,7 @@ Workflow:
 | `citation_styles.py` | Citation style management (built-in APA/Vancouver/Chicago/MLA + dynamically loaded custom styles stored in `data/citation_styles/`) |
 | `citation_check.py` | Citation verification (extract author-year citations from text + cross-check against the local library) |
 | `audit.py` | Data-quality auditing + repair |
-| `sources/` | External source adapters (endnote / zotero / arxiv) |
+| `sources/` | External source adapters (endnote / zotero / arxiv / webtools) |
 | `cli.py` | Main CLI entry point |
 | `setup.py` | Environment detection + setup wizard |
 | `metrics.py` | LLM token usage + API timing |
@@ -191,7 +197,7 @@ Besides skills, the current CLI also provides several important capabilities wor
 - Retrieval-related: `search-author`, `embed`, `vsearch`, `usearch`, `fsearch`, `top-cited`
 - Graph-related: `refs`, `citing`, `shared-refs`
 - Enrichment and repair: `enrich-toc`, `enrich-l3`, `backfill-abstract`, `refetch`, `repair`
-- Data maintenance: `attach-pdf`
+- Data maintenance: `attach-pdf`, `ingest-link`
 - Workspace: `ws` (subcommands such as `init`, `add`, `remove`, `show`, `search`, `export`, and more)
 - Proceedings: `proceedings` (`apply-split`, `build-clean-candidates`, `apply-clean`) and `fsearch --scope proceedings`
 - External and scientific runtime: `arxiv`, `toolref`, `insights`, `style`, `document`
@@ -384,7 +390,7 @@ data/explore/<name>/
 ### `sources/` Abstraction Layer
 
 `papers.py` is the path-helper layer for the local library under `data/papers/`, and modules use it directly to iterate paper directories and read `meta.json`.
-`sources/` holds external-source adapters such as arXiv, Endnote, and Zotero.
+`sources/` holds external-source adapters such as arXiv, Endnote, Zotero, and webtools-style HTTP backends.
 
 ## Configuration
 

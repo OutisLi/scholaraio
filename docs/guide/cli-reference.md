@@ -35,6 +35,7 @@ scholaraio top-cited
 
 ```text
 scholaraio pipeline [preset]
+scholaraio ingest-link <url> [<url> ...]
 scholaraio enrich-toc
 scholaraio enrich-l3
 scholaraio backfill-abstract
@@ -44,6 +45,7 @@ scholaraio attach-pdf
 ```
 
 - `pipeline` is the main composable ingest entrypoint.
+- `ingest-link` pulls one or more rendered web URLs or online PDFs through an external `qt-web-extractor` service and routes them into the existing document ingest flow.
 - Current preset values are `full`, `ingest`, `enrich`, and `reindex`.
 - Run `scholaraio pipeline --help` for pipeline options such as `--steps`, `--dry-run`, `--no-api`, and `--rebuild`.
 
@@ -81,6 +83,7 @@ scholaraio toolref
 scholaraio arxiv
 scholaraio document
 scholaraio style
+scholaraio backup
 ```
 
 - `toolref` provides versioned scientific tool documentation lookup.
@@ -88,6 +91,10 @@ scholaraio style
 - `arxiv` supports arXiv search and PDF fetch.
 - `document` provides Office-document utilities such as inspection.
 - `style` manages citation styles.
+- `backup` lists configured rsync targets and runs a named backup plan.
+- `backup run` is intentionally non-interactive: SSH is launched with `BatchMode=yes`, so key-based auth and host trust must already be prepared.
+- If a target stores `password` in `config.local.yaml`, ScholarAIO switches to an internal non-interactive askpass path instead of waiting for a terminal prompt.
+- A good first-run sequence is `ssh-keyscan ... >> ~/.ssh/known_hosts`, then `ssh -i <key> -p <port> <user>@<host> true`, then `scholaraio backup run <target> --dry-run`.
 
 ## Audit, Setup, And Runtime Inspection
 

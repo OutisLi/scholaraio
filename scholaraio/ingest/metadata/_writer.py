@@ -49,10 +49,12 @@ def metadata_to_dict(meta: PaperMetadata) -> dict:
         "citation_count": {},
         "ids": {},
         "source_file": meta.source_file,
+        "source_url": meta.source_url,
+        "source_type": meta.source_type,
         "extraction_method": meta.extraction_method,
         "api_sources": meta.api_sources,
         "references": meta.references,
-        "extracted_at": "",
+        "extracted_at": meta.extracted_at,
     }
     # Citation counts
     if meta.citation_count_crossref is not None:
@@ -135,6 +137,9 @@ def refetch_metadata(json_path: Path) -> bool:
         publisher=data.get("publisher", ""),
         issn=data.get("issn", ""),
         source_file=data.get("source_file", ""),
+        source_url=data.get("source_url", ""),
+        source_type=data.get("source_type", ""),
+        extracted_at=data.get("extracted_at", ""),
         extraction_method=data.get("extraction_method", ""),
         references=data.get("references", []),
         api_sources=[],  # reset so enrich_metadata re-populates
@@ -289,15 +294,18 @@ def rename_paper(json_path: Path, *, dry_run: bool = False) -> Path | None:
     new_dir = papers_root / new_stem
 
     # Avoid collision with existing directories
-    if new_dir.exists():
+    if new_dir.exists() and new_dir != paper_d:
         suffix = 2
         while True:
             candidate = f"{new_stem}-{suffix}"
-            if not (papers_root / candidate).exists():
-                new_stem = candidate
-                new_dir = papers_root / new_stem
+            candidate_dir = papers_root / candidate
+            if candidate_dir == paper_d or not candidate_dir.exists():
+                new_dir = candidate_dir
                 break
             suffix += 1
+
+    if new_dir == paper_d:
+        return None
 
     if dry_run:
         return new_dir / "meta.json"
@@ -410,6 +418,13 @@ def rename_files(md_path: Path, json_path: Path, new_stem: str, dry_run: bool = 
 
     if paper_d != new_dir:
         paper_d.rename(new_dir)
+        try:
+            data = json.loads(new_json.read_text(encoding="utf-8"))
+            uuid = str(data.get("id") or "").strip()
+            if uuid:
+                _update_registry_dir_name(papers_root.parent / "index.db", uuid, new_dir.name)
+        except Exception as e:
+            _log.debug("failed to update papers_registry during rename_files: %s", e)
     _log.debug("renamed dir: %s -> %s", paper_d.name, new_dir.name)
     return new_md, new_json
 

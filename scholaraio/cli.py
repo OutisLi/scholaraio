@@ -5,14 +5,14 @@ cli.py — scholaraio 命令行入口
 命令：
     scholaraio index [--rebuild]
     scholaraio embed [--rebuild]
-    scholaraio search <query> [--top N] [--year Y] [--journal J] [--type T]
-    scholaraio search-author <query> [--top N] [--year Y] [--journal J] [--type T]
-    scholaraio vsearch <query> [--top N] [--year Y] [--journal J] [--type T]
-    scholaraio usearch <query> [--top N] [--year Y] [--journal J] [--type T]
+    scholaraio search <query> [--limit N] [--year Y] [--journal J] [--type T]
+    scholaraio search-author <query> [--limit N] [--year Y] [--journal J] [--type T]
+    scholaraio vsearch <query> [--limit N] [--year Y] [--journal J] [--type T]
+    scholaraio usearch <query> [--limit N] [--year Y] [--journal J] [--type T]
     scholaraio show <paper-id> [--layer 1|2|3|4]
     scholaraio enrich-toc [<paper-id> | --all] [--force] [--inspect]
     scholaraio enrich-l3 [<paper-id> | --all] [--force] [--inspect] [--max-retries N]
-    scholaraio top-cited [--top N] [--year Y] [--journal J] [--type T]
+    scholaraio top-cited [--limit N] [--year Y] [--journal J] [--type T]
     scholaraio refs <paper-id>
     scholaraio citing <paper-id>
     scholaraio shared-refs <id1> <id2> ... [--min N]
@@ -28,7 +28,7 @@ cli.py — scholaraio 命令行入口
     scholaraio explore fetch --issn <ISSN> [--name NAME] [--year-range Y]
     scholaraio explore embed --name <NAME> [--rebuild]
     scholaraio explore topics --name <NAME> [--build] [--rebuild] [--topic ID]
-    scholaraio explore search --name <NAME> <query> [--top N]
+    scholaraio explore search --name <NAME> <query> [--limit N]
     scholaraio explore viz --name <NAME>
     scholaraio explore list
     scholaraio explore info [--name NAME]
@@ -37,6 +37,7 @@ cli.py — scholaraio 命令行入口
     scholaraio import-endnote <file.xml|file.ris> [--no-api] [--dry-run] [--no-convert]
     scholaraio import-zotero [--api-key KEY] [--library-id ID] [--local PATH] [--list-collections] ...
     scholaraio attach-pdf <paper-id> <path/to/paper.pdf>
+    scholaraio ingest-link <url> [<url> ...] [--dry-run] [--force] [--pdf] [--no-index] [--json]
     scholaraio citation-check [<file>] [--ws <workspace-name>]
     scholaraio proceedings apply-split <proceeding_dir> <split_plan.json>
     scholaraio proceedings build-clean-candidates <proceeding_dir>
@@ -46,7 +47,7 @@ cli.py — scholaraio 命令行入口
     scholaraio ws remove <name> <paper-refs...>
     scholaraio ws list
     scholaraio ws show <name>
-    scholaraio ws search <name> <query> [--top N] [--mode unified|keyword|semantic]
+    scholaraio ws search <name> <query> [--limit N] [--mode unified|keyword|semantic]
     scholaraio ws rename <old-name> <new-name>
     scholaraio ws export <name> [-o FILE]
 """
@@ -57,14 +58,19 @@ import argparse
 import concurrent.futures
 import json
 import logging
+import re
+import shlex
 import shutil
 import sys
 import tempfile
 import time
+from contextlib import nullcontext
+from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from scholaraio.config import load_config
-from scholaraio.log import ui
+from scholaraio.log import redirect_console_ui, ui
 
 _log = logging.getLogger(__name__)
 
@@ -74,8 +80,41 @@ _log = logging.getLogger(__name__)
 # ============================================================================
 
 
+class _ResultLimitAction(argparse.Action):
+    """Accept --limit as the canonical flag while keeping --top as a safe alias."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        current = getattr(namespace, self.dest, None)
+        if current is not None and current != values:
+            parser.error("--limit 和 --top 不能同时指定不同的值")
+        setattr(namespace, self.dest, values)
+
+
+def _add_result_limit_arg(parser: argparse.ArgumentParser, help_text: str) -> None:
+    parser.add_argument(
+        "--limit",
+        "--top",
+        dest="result_limit",
+        metavar="N",
+        type=int,
+        default=None,
+        action=_ResultLimitAction,
+        help=f"{help_text}（兼容旧写法 --top）",
+    )
+
+
+def _resolve_result_limit(args: argparse.Namespace, default: int) -> int:
+    result_limit = getattr(args, "result_limit", None)
+    if result_limit is not None:
+        return result_limit
+    legacy_top = getattr(args, "top", None)
+    if legacy_top is not None:
+        return legacy_top
+    return default
+
+
 def _resolve_top(args: argparse.Namespace, default: int) -> int:
-    return args.top if args.top is not None else default
+    return _resolve_result_limit(args, default)
 
 
 def _record_search_metrics(
@@ -276,7 +315,7 @@ def cmd_show(args: argparse.Namespace, cfg) -> None:
             else:
                 ui(f"已追加笔记到 {paper_d.name}/notes.md")
 
-    l1 = load_l1(json_path)
+    l1 = _enrich_show_header(load_l1(json_path), paper_d=paper_d, requested_id=args.paper_id, cfg=cfg)
     _print_header(l1)
 
     # Show existing agent notes (T2 layer) if available
@@ -479,14 +518,94 @@ def cmd_repair(args: argparse.Namespace, cfg) -> None:
         _extract_lastname,
         enrich_metadata,
         generate_new_stem,
+        metadata_to_dict,
         rename_files,
-        write_metadata_json,
     )
+    from scholaraio.papers import generate_uuid, write_meta
+
+    def _coerce_str(value: object) -> str:
+        if isinstance(value, str):
+            return value
+        if value is None:
+            return ""
+        return str(value)
+
+    def _coerce_str_list(value: object) -> list[str]:
+        if isinstance(value, str):
+            return [value] if value.strip() else []
+        if isinstance(value, (list, tuple, set)):
+            items = [_coerce_str(item).strip() for item in value]
+            return [item for item in items if item]
+        return []
+
+    def _coerce_citation_count(citation_count: object, *keys: str) -> int | None:
+        if not isinstance(citation_count, dict):
+            return None
+        for key in keys:
+            value = citation_count.get(key)
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str):
+                try:
+                    return int(value)
+                except ValueError:
+                    continue
+        return None
+
+    def _meta_from_existing(
+        existing_data: dict,
+        *,
+        existing_uuid: str,
+        fallback_source_file: str,
+    ) -> PaperMetadata:
+        ids = existing_data.get("ids") or {}
+        citation_count = existing_data.get("citation_count") or {}
+        authors = _coerce_str_list(existing_data.get("authors"))
+        first_author = _coerce_str(existing_data.get("first_author")) or (authors[0] if authors else "")
+        first_author_lastname = _coerce_str(existing_data.get("first_author_lastname"))
+        if not first_author_lastname and first_author:
+            first_author_lastname = _extract_lastname(first_author)
+
+        return PaperMetadata(
+            id=existing_uuid,
+            title=_coerce_str(existing_data.get("title")),
+            authors=authors,
+            first_author=first_author,
+            first_author_lastname=first_author_lastname,
+            year=existing_data.get("year"),
+            doi=_coerce_str(existing_data.get("doi")),
+            arxiv_id=_coerce_str(ids.get("arxiv")),
+            publication_number=_coerce_str(ids.get("patent_publication_number")),
+            journal=_coerce_str(existing_data.get("journal")),
+            abstract=_coerce_str(existing_data.get("abstract")),
+            paper_type=_coerce_str(existing_data.get("paper_type")),
+            citation_count_s2=_coerce_citation_count(citation_count, "semantic_scholar", "s2"),
+            citation_count_openalex=_coerce_citation_count(citation_count, "openalex"),
+            citation_count_crossref=_coerce_citation_count(citation_count, "crossref"),
+            s2_paper_id=_coerce_str(ids.get("semantic_scholar")),
+            openalex_id=_coerce_str(ids.get("openalex")),
+            crossref_doi=_coerce_str(ids.get("doi")) or _coerce_str(existing_data.get("doi")),
+            api_sources=_coerce_str_list(existing_data.get("api_sources")),
+            references=_coerce_str_list(existing_data.get("references")),
+            volume=_coerce_str(existing_data.get("volume")),
+            issue=_coerce_str(existing_data.get("issue")),
+            pages=_coerce_str(existing_data.get("pages")),
+            publisher=_coerce_str(existing_data.get("publisher")),
+            issn=_coerce_str(existing_data.get("issn")),
+            source_file=_coerce_str(existing_data.get("source_file")) or fallback_source_file,
+            source_url=_coerce_str(existing_data.get("source_url")),
+            source_type=_coerce_str(existing_data.get("source_type")),
+            extracted_at=_coerce_str(existing_data.get("extracted_at")),
+            extraction_method=_coerce_str(existing_data.get("extraction_method")),
+        )
 
     papers_dir = cfg.papers_dir
-    paper_id = args.paper_id
-
-    paper_d = papers_dir / paper_id
+    direct_dir = papers_dir / args.paper_id
+    if direct_dir.is_dir():
+        paper_d = direct_dir
+    else:
+        paper_d = _resolve_paper(args.paper_id, cfg)
+    paper_id = paper_d.name
     md_path = paper_d / "paper.md"
     json_path = paper_d / "meta.json"
 
@@ -495,21 +614,45 @@ def cmd_repair(args: argparse.Namespace, cfg) -> None:
         sys.exit(1)
 
     # Preserve existing UUID
+    existing_data: dict = {}
     existing_uuid = ""
     if json_path.exists():
         try:
             existing_data = json.loads(json_path.read_text(encoding="utf-8"))
-            existing_uuid = existing_data.get("id", "")
+            existing_uuid = str(existing_data.get("id") or "")
         except (json.JSONDecodeError, OSError) as e:
             _log.debug("failed to read existing meta.json: %s", e)
+    ids = existing_data.get("ids") or {}
+    strong_registry_match = _lookup_registry_by_candidates(
+        cfg,
+        args.paper_id if args.paper_id != paper_d.name else "",
+        existing_data.get("doi") or "",
+        ids.get("doi") or "",
+        ids.get("patent_publication_number") or "",
+    )
+    if strong_registry_match and strong_registry_match.get("id"):
+        existing_uuid = str(strong_registry_match.get("id") or "")
+    elif not existing_uuid:
+        weak_registry_match = _lookup_registry_by_candidates(cfg, paper_d.name)
+        if weak_registry_match and weak_registry_match.get("id"):
+            existing_uuid = str(weak_registry_match.get("id") or "")
+    if not existing_uuid:
+        existing_uuid = generate_uuid()
 
-    # Build PaperMetadata from CLI args (skip md parsing)
-    meta = PaperMetadata()
+    # Start from existing metadata and only override fields explicitly provided by the user.
+    meta = _meta_from_existing(
+        existing_data,
+        existing_uuid=existing_uuid,
+        fallback_source_file=md_path.name,
+    )
     meta.id = existing_uuid
     meta.title = args.title
-    meta.doi = args.doi or ""
-    meta.year = args.year
-    meta.source_file = md_path.name
+    if args.doi:
+        meta.doi = args.doi
+        meta.crossref_doi = args.doi
+    if args.year is not None:
+        meta.year = args.year
+    meta.source_file = meta.source_file or md_path.name
     if args.author:
         meta.authors = [args.author]
         meta.first_author = args.author
@@ -547,8 +690,10 @@ def cmd_repair(args: argparse.Namespace, cfg) -> None:
         ui("  [dry-run] 未写入任何文件")
         return
 
-    # Write new JSON
-    write_metadata_json(meta, json_path)
+    # Preserve existing enriched or custom top-level fields while updating metadata.
+    new_data = dict(existing_data)
+    new_data.update(metadata_to_dict(meta))
+    write_meta(json_path.parent, new_data)
     ui(f"  已写入: {json_path.name}")
 
     new_stem = generate_new_stem(meta)
@@ -948,7 +1093,7 @@ def cmd_toolref(args: argparse.Namespace, cfg) -> None:
             results = toolref_search(
                 args.tool,
                 query,
-                top_k=args.top,
+                top_k=_resolve_result_limit(args, 20),
                 program=args.program,
                 section=args.section,
                 cfg=cfg,
@@ -1240,7 +1385,7 @@ def cmd_topics(args: argparse.Namespace, cfg) -> None:
     # Show specific topic
     if args.topic is not None:
         tid = args.topic
-        top_n = args.top or 0  # 0 = show all
+        top_n = _resolve_result_limit(args, 0) or 0  # 0 = show all
         if tid == -1:
             papers = get_outliers(model)
             ui(f"离群论文: {len(papers)}\n")
@@ -2369,6 +2514,173 @@ def cmd_arxiv_fetch(args: argparse.Namespace, cfg) -> None:
     ui(f"已下载到 inbox: {pdf_path}")
 
 
+def _slugify_ingest_link_title(title: str, fallback_url: str, index: int) -> str:
+    raw = (title or "").strip() or _fallback_ingest_link_title(fallback_url, index)
+    slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+    slug = slug[:240].strip("-")
+    return slug or f"link-{index:02d}"
+
+
+def _fallback_ingest_link_title(source_url: str, index: int) -> str:
+    parsed = urlparse(source_url)
+    return Path(parsed.path).stem or parsed.netloc or f"link-{index:02d}"
+
+
+def _render_ingest_link_markdown(title: str, source_url: str, body: str) -> str:
+    parts = [
+        f"# {title}",
+        "",
+        f"Source URL: {source_url}",
+        "",
+    ]
+    body_text = (body or "").strip()
+    if body_text:
+        parts.append(body_text)
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def _webextract_for_ingest_link(
+    url: str,
+    *,
+    pdf: bool | None,
+    extractor,
+    max_attempts: int = 3,
+    backoff_base: float = 1.0,
+) -> dict:
+    last_result: dict | None = None
+    last_error = ""
+    last_source_url = url
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            result = extractor(url, pdf=pdf)
+        except Exception as exc:
+            last_result = None
+            last_error = str(exc)
+            last_source_url = url
+        else:
+            result = result or {}
+            source_url = (result.get("url") or url).strip()
+            error = (result.get("error") or "").strip()
+            text = result.get("text") or ""
+            last_result = result
+            last_error = error
+            last_source_url = source_url
+            if not error or text.strip():
+                if attempt > 1:
+                    ui(f"链接提取重试后成功: {source_url} (第 {attempt} 次)")
+                return result
+
+        if attempt >= max_attempts:
+            break
+        wait = backoff_base * float(2 ** (attempt - 1))
+        ui(f"链接提取失败，准备重试: {last_source_url} ({last_error})，{wait:.1f}s 后重试")
+        time.sleep(wait)
+
+    if last_result is not None:
+        return last_result
+    return {
+        "url": last_source_url,
+        "title": "",
+        "text": "",
+        "html": "",
+        "error": last_error or "unknown extraction error",
+    }
+
+
+def cmd_ingest_link(args: argparse.Namespace, cfg) -> None:
+    from scholaraio.ingest.pipeline import run_pipeline
+    from scholaraio.sources.webtools import webextract
+
+    urls = [u.strip() for u in args.urls if u.strip()]
+    if not urls:
+        ui("请至少提供一个 URL")
+        return
+
+    if args.dry_run:
+        ui(f"[dry-run] 将抓取 {len(urls)} 个链接并直接入库")
+        for url in urls:
+            ui(f"  - {url}")
+        return
+
+    step_names = ["extract_doc", "ingest"]
+    if not args.no_index:
+        step_names.extend(["embed", "index"])
+
+    summaries: list[dict[str, str]] = []
+    output_mode = redirect_console_ui(sys.stderr) if args.json else nullcontext()
+
+    try:
+        with output_mode, tempfile.TemporaryDirectory(prefix="scholaraio_link_") as tmpdir:
+            ui(f"开始直接入库链接: {len(urls)} 个")
+            tmp_root = Path(tmpdir)
+            inbox_dir = tmp_root / "inbox"
+            inbox_dir.mkdir(parents=True, exist_ok=True)
+            doc_inbox_dir = Path(tmpdir) / "inbox-doc"
+            doc_inbox_dir.mkdir(parents=True, exist_ok=True)
+
+            for idx, url in enumerate(urls, start=1):
+                pdf_mode = True if args.pdf else None
+                result = _webextract_for_ingest_link(url, pdf=pdf_mode, extractor=webextract)
+                source_url = (result.get("url") or url).strip()
+                error = (result.get("error") or "").strip()
+                text = result.get("text") or ""
+                if error and not text.strip():
+                    ui(f"链接提取失败，已跳过: {source_url} ({error})")
+                    continue
+                if error:
+                    ui(f"链接提取有警告，继续入库: {source_url} ({error})")
+
+                title = (result.get("title") or "").strip() or _fallback_ingest_link_title(source_url, idx)
+                slug = _slugify_ingest_link_title(title, source_url, idx)
+                md_name = f"{idx:02d}-{slug}.md"
+                md_path = doc_inbox_dir / md_name
+                sidecar_path = md_path.with_suffix(".json")
+
+                md_text = _render_ingest_link_markdown(title, source_url, text)
+                md_path.write_text(md_text, encoding="utf-8")
+
+                sidecar = {
+                    "title": title,
+                    "source_file": md_name,
+                    "source_url": source_url,
+                    "source_type": "web",
+                    "extracted_at": datetime.now(timezone.utc).isoformat(),
+                    "extraction_method": "qt-web-extractor",
+                }
+                sidecar_path.write_text(json.dumps(sidecar, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+                summaries.append(
+                    {
+                        "url": source_url,
+                        "title": title,
+                        "markdown_file": md_name,
+                    }
+                )
+                ui(f"已抓取: {title[:80]}")
+
+            if not summaries:
+                ui("没有可入库的链接内容")
+                return
+
+            run_pipeline(
+                step_names,
+                cfg,
+                {
+                    "inbox_dir": inbox_dir,
+                    "doc_inbox_dir": doc_inbox_dir,
+                    "force": args.force,
+                    "include_aux_inboxes": False,
+                },
+            )
+    except Exception as e:
+        ui(f"链接抓取或入库失败: {e}")
+        return
+
+    if args.json:
+        sys.stdout.write(json.dumps(summaries, ensure_ascii=False, indent=2) + "\n")
+
+
 # ============================================================================
 #  insights
 # ============================================================================
@@ -2543,6 +2855,98 @@ def cmd_setup(args: argparse.Namespace, cfg) -> None:
         ui(format_check_results(results))
     else:
         run_wizard(cfg)
+
+
+def cmd_backup(args: argparse.Namespace, cfg) -> None:
+    from scholaraio.backup import BackupConfigError, build_rsync_command, run_backup
+
+    action = getattr(args, "backup_action", None)
+    if action == "list":
+        ui(f"备份源目录: {cfg.backup_source_dir}")
+        if not cfg.backup.targets:
+            ui("未配置任何备份目标。")
+            return
+        ui()
+        for name, target in sorted(cfg.backup.targets.items()):
+            status = "启用" if target.enabled else "禁用"
+            remote = f"{target.user}@{target.host}" if target.user else target.host
+            ui(f"[{name}] {status}")
+            ui(f"  远端: {remote}:{target.path}")
+            ui(f"  模式: {target.mode}  |  压缩: {'on' if target.compress else 'off'}")
+            if target.exclude:
+                ui(f"  排除: {', '.join(target.exclude)}")
+        return
+
+    if action == "run":
+        try:
+            cmd = build_rsync_command(cfg, args.target, dry_run=args.dry_run)
+            ui("即将执行备份命令：")
+            ui("  " + shlex.join(cmd))
+            result = run_backup(cfg, args.target, dry_run=args.dry_run)
+        except BackupConfigError as exc:
+            _log.error("%s", exc)
+            sys.exit(1)
+
+        if result.stdout.strip():
+            ui()
+            ui(result.stdout.rstrip())
+        if result.stderr.strip():
+            ui()
+            ui(result.stderr.rstrip())
+        if result.returncode != 0:
+            _print_backup_failure_guidance(cfg, args.target, result.stderr)
+            _log.error("备份失败，退出码: %s", result.returncode)
+            sys.exit(result.returncode)
+        if args.dry_run:
+            ui()
+            ui("预演完成：未实际传输文件。")
+        else:
+            ui()
+            ui("备份完成。")
+        return
+
+    _log.error("未知 backup 子命令: %s", action)
+    sys.exit(1)
+
+
+def _print_backup_failure_guidance(cfg, target_name: str, stderr: str) -> None:
+    stderr = (stderr or "").strip()
+    if not stderr:
+        return
+
+    target = cfg.backup.targets.get(target_name)
+    host = target.host if target and target.host else "<host>"
+    user = target.user if target and target.user else "<user>"
+    port = target.port if target and target.port else 22
+    identity_file = target.identity_file if target and target.identity_file else "~/.ssh/id_ed25519"
+    remote = f"{user}@{host}" if user != "<user>" else host
+    lower = stderr.lower()
+
+    auth_error = "permission denied" in lower or "publickey" in lower
+    host_key_error = "host key verification failed" in lower or "host key is unknown" in lower
+    if not auth_error and not host_key_error:
+        return
+
+    ui()
+    ui("提示：`scholaraio backup run` 会强制使用非交互 SSH（`BatchMode=yes`），不会在 CLI 里等待密码或 host key 确认。")
+    ui("建议按下面步骤完成一次性配置：")
+    ui("  1. 在 `config.local.yaml` 中为该目标补齐 SSH 配置：")
+    ui("     backup:")
+    ui("       targets:")
+    ui(f"         {target_name}:")
+    ui(f"           host: {host}")
+    ui(f"           user: {user}")
+    ui(f"           port: {port}")
+    ui(f"           identity_file: {identity_file}  # 推荐：密钥登录")
+    ui("           password: <ssh-password>  # 备选：仅放在 config.local.yaml")
+    if host_key_error:
+        ui(f"  2. 先写入 `known_hosts`：`ssh-keyscan -p {port} {host} >> ~/.ssh/known_hosts`")
+    else:
+        ui("  2. `backup run` 不支持在 CLI 里临时输入 SSH 密码；请提前准备密钥或把密码写进 `config.local.yaml`。")
+        ui(f"     首次连接若还没信任主机，请先执行：`ssh-keyscan -p {port} {host} >> ~/.ssh/known_hosts`")
+    ui(f"  3. 若走密钥方案，先验证：`ssh -i {identity_file} -p {port} {remote} true`")
+    ui("     若走密码方案，保存 `config.local.yaml` 后直接重试 backup dry-run 即可。")
+    ui(f"  4. 验证通过后重试：`scholaraio backup run {target_name} --dry-run`")
 
 
 def cmd_import_endnote(args: argparse.Namespace, cfg) -> None:
@@ -3011,6 +3415,22 @@ def _format_citations(cc: dict) -> str:
     return " | ".join(parts)
 
 
+def _lookup_registry_by_candidates(cfg, *candidates: object) -> dict | None:
+    """Try registry lookups in order and return the first match."""
+    from scholaraio.index import lookup_paper
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate_str = str(candidate or "").strip()
+        if not candidate_str or candidate_str in seen:
+            continue
+        seen.add(candidate_str)
+        reg = lookup_paper(cfg.index_db, candidate_str)
+        if reg:
+            return reg
+    return None
+
+
 def _resolve_paper(paper_id: str, cfg) -> Path:
     """Resolve a paper identifier (dir_name, UUID, or DOI) to its directory.
 
@@ -3059,6 +3479,8 @@ def _print_header(l1: dict) -> None:
     if len(authors) > 3:
         author_str += f" et al. ({len(authors)} total)"
     ui(f"论文ID   : {l1['paper_id']}")
+    if l1.get("dir_name") and l1["dir_name"] != l1["paper_id"]:
+        ui(f"目录名   : {l1['dir_name']}")
     ui(f"标题     : {l1['title']}")
     ui(f"作者     : {author_str}")
     ui(f"年份     : {l1.get('year') or '?'}  |  期刊: {l1.get('journal') or '?'}")
@@ -3076,6 +3498,21 @@ def _print_header(l1: dict) -> None:
         ui(f"S2       : {ids['semantic_scholar_url']}")
     if ids.get("openalex_url"):
         ui(f"OpenAlex : {ids['openalex_url']}")
+
+
+def _enrich_show_header(l1: dict, *, paper_d: Path, requested_id: str, cfg) -> dict:
+    enriched = dict(l1)
+    enriched["dir_name"] = paper_d.name
+    current_paper_id = str(enriched.get("paper_id") or "").strip()
+    reg = _lookup_registry_by_candidates(
+        cfg,
+        requested_id if requested_id != paper_d.name else "",
+        enriched.get("doi") or "",
+        paper_d.name if not current_paper_id or current_paper_id == paper_d.name else "",
+    )
+    if reg and reg.get("id"):
+        enriched["paper_id"] = str(reg["id"])
+    return enriched
 
 
 def cmd_citation_check(args: argparse.Namespace, cfg) -> None:
@@ -3164,14 +3601,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_search = sub.add_parser("search", help="关键词检索")
     p_search.set_defaults(func=cmd_search)
     p_search.add_argument("query", nargs="+", help="检索词")
-    p_search.add_argument("--top", type=int, default=None, help="最多返回 N 条（默认读 config search.top_k）")
+    _add_result_limit_arg(p_search, "最多返回 N 条（默认读 config search.top_k）")
     _add_filter_args(p_search)
 
     # --- search-author ---
     p_sa = sub.add_parser("search-author", help="按作者名搜索")
     p_sa.set_defaults(func=cmd_search_author)
     p_sa.add_argument("query", nargs="+", help="作者名（模糊匹配）")
-    p_sa.add_argument("--top", type=int, default=None, help="最多返回 N 条（默认读 config search.top_k）")
+    _add_result_limit_arg(p_sa, "最多返回 N 条（默认读 config search.top_k）")
     _add_filter_args(p_sa)
 
     # --- show ---
@@ -3203,14 +3640,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_vsearch = sub.add_parser("vsearch", help="语义向量检索")
     p_vsearch.set_defaults(func=cmd_vsearch)
     p_vsearch.add_argument("query", nargs="+", help="检索词")
-    p_vsearch.add_argument("--top", type=int, default=None, help="最多返回 N 条（默认读 config embed.top_k）")
+    _add_result_limit_arg(p_vsearch, "最多返回 N 条（默认读 config embed.top_k）")
     _add_filter_args(p_vsearch)
 
     # --- usearch (unified) ---
     p_usearch = sub.add_parser("usearch", help="融合检索（关键词 + 语义向量）")
     p_usearch.set_defaults(func=cmd_usearch)
     p_usearch.add_argument("query", nargs="+", help="检索词")
-    p_usearch.add_argument("--top", type=int, default=None, help="最多返回 N 条（默认读 config search.top_k）")
+    _add_result_limit_arg(p_usearch, "最多返回 N 条（默认读 config search.top_k）")
     _add_filter_args(p_usearch)
 
     # --- enrich-toc ---
@@ -3251,7 +3688,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # --- top-cited ---
     p_tc = sub.add_parser("top-cited", help="按引用量排序查看论文")
     p_tc.set_defaults(func=cmd_top_cited)
-    p_tc.add_argument("--top", type=int, default=None, help="最多返回 N 条（默认读 config search.top_k）")
+    _add_result_limit_arg(p_tc, "最多返回 N 条（默认读 config search.top_k）")
     _add_filter_args(p_tc)
 
     # --- refs ---
@@ -3283,7 +3720,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--merge", type=str, default=None, metavar="IDS", help="手动合并主题，格式: 1,6,14+3,5（用+分隔组）"
     )
     p_topics.add_argument("--topic", type=int, default=None, metavar="ID", help="查看指定主题的论文（-1 查看 outlier）")
-    p_topics.add_argument("--top", type=int, default=None, help="返回条数")
+    _add_result_limit_arg(p_topics, "返回条数")
     p_topics.add_argument("--min-topic-size", type=int, default=None, help="最小聚类大小（覆盖 config）")
     p_topics.add_argument("--nr-topics", type=int, default=None, help="目标主题数（覆盖 config，0=auto, -1=不合并）")
     p_topics.add_argument("--viz", action="store_true", help="生成 HTML 可视化图表（6 张）")
@@ -3309,7 +3746,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # --- repair ---
     p_repair = sub.add_parser("repair", help="修复论文元数据（手动指定 title/DOI，跳过 MD 解析）")
     p_repair.set_defaults(func=cmd_repair)
-    p_repair.add_argument("paper_id", help="论文 ID（文件名 stem）")
+    p_repair.add_argument("paper_id", help="论文 ID（目录名 / UUID / DOI）")
     p_repair.add_argument("--title", required=True, help="正确的论文标题")
     p_repair.add_argument("--doi", default="", help="已知 DOI（加速 API 查询）")
     p_repair.add_argument("--author", default="", help="一作全名")
@@ -3346,14 +3783,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_et.add_argument("--build", action="store_true", help="构建主题模型")
     p_et.add_argument("--rebuild", action="store_true", help="重建主题模型")
     p_et.add_argument("--topic", type=int, default=None, help="查看指定主题的论文")
-    p_et.add_argument("--top", type=int, default=None, help="返回条数")
+    _add_result_limit_arg(p_et, "返回条数")
     p_et.add_argument("--min-topic-size", type=int, default=None, help="最小聚类大小（默认 30）")
     p_et.add_argument("--nr-topics", type=int, default=None, help="目标主题数（默认自然聚类）")
 
     p_es = p_explore_sub.add_parser("search", help="探索库搜索（语义/关键词/融合）")
     p_es.add_argument("--name", required=True, help="探索库名称")
     p_es.add_argument("query", nargs="+", help="查询文本")
-    p_es.add_argument("--top", type=int, default=None, help="返回条数")
+    _add_result_limit_arg(p_es, "返回条数")
     p_es.add_argument(
         "--mode", choices=["semantic", "keyword", "unified"], default="semantic", help="搜索模式（默认 semantic）"
     )
@@ -3421,7 +3858,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ws_add_batch.add_argument("--search", dest="add_search", type=str, default=None, help="按搜索结果批量添加")
     p_ws_add_batch.add_argument("--topic", dest="add_topic", type=int, default=None, help="按主题 ID 批量添加")
     p_ws_add_batch.add_argument("--all", dest="add_all", action="store_true", default=False, help="添加全库论文")
-    p_ws_add.add_argument("--top", type=int, default=None, help="限制 --search 返回条数")
+    _add_result_limit_arg(p_ws_add, "限制 --search 返回条数")
     _add_filter_args(p_ws_add)
 
     p_ws_rm = p_ws_sub.add_parser("remove", help="从工作区移除论文")
@@ -3436,7 +3873,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ws_search = p_ws_sub.add_parser("search", help="在工作区内搜索")
     p_ws_search.add_argument("name", help="工作区名称")
     p_ws_search.add_argument("query", nargs="+", help="查询文本")
-    p_ws_search.add_argument("--top", type=int, default=None, help="返回条数")
+    _add_result_limit_arg(p_ws_search, "返回条数")
     p_ws_search.add_argument(
         "--mode", choices=["unified", "keyword", "semantic"], default="unified", help="搜索模式（默认 unified）"
     )
@@ -3499,6 +3936,18 @@ def _build_parser() -> argparse.ArgumentParser:
     p_setup_check = p_setup_sub.add_parser("check", help="检查环境状态")
     p_setup_check.add_argument("--lang", choices=["en", "zh"], default="zh", help="输出语言（zh 或 en，默认 zh）")
 
+    # --- backup ---
+    p_backup = sub.add_parser("backup", help="rsync 增量备份", description="rsync 增量备份")
+    p_backup.set_defaults(func=cmd_backup)
+    p_backup_sub = p_backup.add_subparsers(dest="backup_action", required=True)
+
+    p_backup_list = p_backup_sub.add_parser("list", help="列出已配置的备份目标")
+    del p_backup_list  # no extra args needed
+
+    p_backup_run = p_backup_sub.add_parser("run", help="执行指定备份目标")
+    p_backup_run.add_argument("target", help="备份目标名称（来自 config backup.targets）")
+    p_backup_run.add_argument("--dry-run", action="store_true", help="预演模式，只展示 rsync 计划而不实际传输")
+
     # --- fsearch ---
     p_fsearch = sub.add_parser("fsearch", help="联邦搜索：同时搜索主库、proceedings、explore 库和 arXiv")
     p_fsearch.set_defaults(func=cmd_fsearch)
@@ -3509,7 +3958,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default="main",
         help="搜索范围（逗号分隔）：main / proceedings / explore:NAME / explore:* / arxiv（默认 main）",
     )
-    p_fsearch.add_argument("--top", type=int, default=None, help="每个来源最多返回 N 条（默认 10）")
+    _add_result_limit_arg(p_fsearch, "每个来源最多返回 N 条（默认 10）")
 
     # --- proceedings ---
     p_proc = sub.add_parser("proceedings", help="论文集辅助命令（apply-split 等）")
@@ -3536,7 +3985,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_arxiv_search = p_arxiv_sub.add_parser("search", help="搜索 arXiv 预印本")
     p_arxiv_search.set_defaults(func=cmd_arxiv_search)
     p_arxiv_search.add_argument("query", nargs="*", help="检索词（可省略，配合 --category 使用）")
-    p_arxiv_search.add_argument("--top", type=int, default=None, help="最多返回 N 条（默认 10）")
+    _add_result_limit_arg(p_arxiv_search, "最多返回 N 条（默认 10）")
     p_arxiv_search.add_argument("--category", type=str, default="", help="arXiv 分类，如 physics.flu-dyn")
     p_arxiv_search.add_argument(
         "--sort", choices=["relevance", "recent"], default="relevance", help="排序方式（默认 relevance）"
@@ -3548,6 +3997,16 @@ def _build_parser() -> argparse.ArgumentParser:
     p_arxiv_fetch.add_argument("--ingest", action="store_true", help="下载后直接走 ingest pipeline 入库")
     p_arxiv_fetch.add_argument("--force", action="store_true", help="覆盖已有同名 PDF 或强制 pipeline 处理")
     p_arxiv_fetch.add_argument("--dry-run", action="store_true", help="预览将要执行的操作")
+
+    # --- ingest-link ---
+    p_ingest_link = sub.add_parser("ingest-link", help="抓取渲染后的网页/在线 PDF，并按文档流程直接入库")
+    p_ingest_link.set_defaults(func=cmd_ingest_link)
+    p_ingest_link.add_argument("urls", nargs="+", help="一个或多个网页/在线 PDF URL")
+    p_ingest_link.add_argument("--dry-run", action="store_true", help="预览将要执行的操作")
+    p_ingest_link.add_argument("--force", action="store_true", help="强制重新处理生成的文档")
+    p_ingest_link.add_argument("--pdf", action="store_true", help="仅在自动识别不稳时，提示 webextract 按 PDF 模式抓取")
+    p_ingest_link.add_argument("--no-index", action="store_true", help="仅入库，不执行 embed/index")
+    p_ingest_link.add_argument("--json", action="store_true", help="输出抓取结果摘要 JSON")
 
     # --- insights ---
     p_insights = sub.add_parser("insights", help="研究行为分析：搜索热词、最常阅读论文等")
@@ -3613,7 +4072,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_trq = p_tr_sub.add_parser("search", help="全文搜索工具文档")
     p_trq.add_argument("tool", help="工具名")
     p_trq.add_argument("query", nargs="+", help="搜索关键词")
-    p_trq.add_argument("--top", type=int, default=20, help="返回条数（默认 20）")
+    _add_result_limit_arg(p_trq, "返回条数（默认 20）")
     p_trq.add_argument("--program", default=None, help="按程序过滤（如 pw.x）")
     p_trq.add_argument("--section", default=None, help="按 namelist/section 过滤（如 SYSTEM）")
 
