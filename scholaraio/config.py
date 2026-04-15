@@ -273,6 +273,14 @@ class ZoteroConfig:
 
 
 @dataclass
+class WebServiceConfig:
+    """HTTP web service endpoint config."""
+
+    base_url: str = ""
+    api_key: str = ""
+
+
+@dataclass
 class BackupTargetConfig:
     """Rsync backup target configuration.
 
@@ -332,6 +340,8 @@ class Config:
         log: 日志与指标配置。
         translate: 自动翻译配置。
         zotero: Zotero 集成配置。
+        websearch: 外部网页搜索服务配置。
+        webextract: 外部网页提取服务配置。
         backup: 备份配置。
     """
 
@@ -344,6 +354,8 @@ class Config:
     log: LogConfig = field(default_factory=LogConfig)
     translate: TranslateConfig = field(default_factory=TranslateConfig)
     zotero: ZoteroConfig = field(default_factory=ZoteroConfig)
+    websearch: WebServiceConfig = field(default_factory=WebServiceConfig)
+    webextract: WebServiceConfig = field(default_factory=WebServiceConfig)
     backup: BackupConfig = field(default_factory=BackupConfig)
 
     # Root directory of the config file (used to resolve relative paths)
@@ -804,6 +816,18 @@ def _build_config(data: dict, root: Path) -> Config:
         library_type=zotero_data.get("library_type", "user"),
     )
 
+    websearch_data = data.get("websearch", {}) or {}
+    websearch = WebServiceConfig(
+        base_url=str(websearch_data.get("base_url") or "").strip(),
+        api_key=str(websearch_data.get("api_key") or "").strip(),
+    )
+
+    webextract_data = data.get("webextract", {}) or {}
+    webextract = WebServiceConfig(
+        base_url=str(webextract_data.get("base_url") or "").strip(),
+        api_key=str(webextract_data.get("api_key") or "").strip(),
+    )
+
     backup_data = data.get("backup", {}) or {}
     raw_targets = backup_data.get("targets", {}) or {}
     targets: dict[str, BackupTargetConfig] = {}
@@ -850,6 +874,8 @@ def _build_config(data: dict, root: Path) -> Config:
         log=log,
         translate=translate,
         zotero=zotero,
+        websearch=websearch,
+        webextract=webextract,
         backup=backup,
         _root=root,
     )

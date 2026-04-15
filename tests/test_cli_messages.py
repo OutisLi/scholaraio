@@ -8,6 +8,8 @@ from argparse import Namespace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from scholaraio import cli
 from scholaraio.index import build_index
 from scholaraio.ingest.mineru import ConvertResult, PDFValidationResult
@@ -111,6 +113,110 @@ class TestCliHelpLocalization:
         assert "rsync 增量备份" in backup_help
         assert "列出已配置的备份目标" in backup_help
         assert "预演模式" in run_help
+
+
+class TestWebsearchCli:
+    def test_cmd_websearch_exits_on_service_unavailable(self, monkeypatch):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        def fake_search_and_display(*args, **kwargs):
+            raise webtools.ServiceUnavailableError("service down")
+
+        monkeypatch.setattr(webtools, "search_and_display", fake_search_and_display)
+
+        args = Namespace(query=["test"], count=3)
+
+        with pytest.raises(SystemExit) as exc:
+            cli.cmd_websearch(args, SimpleNamespace())
+
+        assert exc.value.code == 1
+        assert any("错误: service down" in message for message in messages)
+        assert any("GUILessBingSearch" in message for message in messages)
+
+    def test_cmd_websearch_does_not_repeat_success_summary(self, monkeypatch):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        monkeypatch.setattr(
+            webtools,
+            "search_and_display",
+            lambda *args, **kwargs: [
+                webtools.WebSearchResult(title="OpenAI", link="https://openai.com", snippet="AI research")
+            ],
+        )
+
+        args = Namespace(query=["openai"], count=1)
+        cli.cmd_websearch(args, SimpleNamespace())
+
+        assert messages == []
+
+
+class TestWebextractCli:
+    def test_cmd_webextract_exits_when_result_contains_error_without_text(self, monkeypatch):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            webtools,
+            "extract_web",
+            lambda *args, **kwargs: {"title": "", "text": "", "error": "partial extraction failed"},
+        )
+
+        args = Namespace(url="https://example.com", pdf=False, full=False, max_chars=10)
+
+        with pytest.raises(SystemExit) as exc:
+            cli.cmd_webextract(args, SimpleNamespace())
+
+        assert exc.value.code == 1
+        assert any("提取失败: partial extraction failed" in message for message in messages)
+        assert all("提取成功" not in message for message in messages)
+
+    def test_cmd_webextract_truncates_long_text_by_default(self, monkeypatch, capsys):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            webtools,
+            "extract_web",
+            lambda *args, **kwargs: {"title": "Page", "text": "abcdefghijklmnopqrstuvwxyz"},
+        )
+
+        args = Namespace(url="https://example.com", pdf=False, full=False, max_chars=10)
+        cli.cmd_webextract(args, SimpleNamespace())
+
+        captured = capsys.readouterr()
+
+        assert any("提取成功: Page" in message for message in messages)
+        assert any("已截断" in message for message in messages)
+        assert "abcdefghij" in captured.out
+        assert "klmnopqrstuvwxyz" not in captured.out
+
+    def test_cmd_webextract_full_prints_complete_text(self, monkeypatch, capsys):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            webtools,
+            "extract_web",
+            lambda *args, **kwargs: {"title": "Page", "text": "abcdefghijklmnopqrstuvwxyz"},
+        )
+
+        args = Namespace(url="https://example.com", pdf=False, full=True, max_chars=10)
+        cli.cmd_webextract(args, SimpleNamespace())
+
+        captured = capsys.readouterr()
+
+        assert any("提取成功: Page" in message for message in messages)
+        assert all("已截断" not in message for message in messages)
+        assert "abcdefghijklmnopqrstuvwxyz" in captured.out
 
 
 class TestShowLayer4Headings:
