@@ -2503,10 +2503,15 @@ def cmd_websearch(args: argparse.Namespace, cfg) -> None:
         sys.exit(1)
 
     if not results:
-        ui(f"未找到与 '{query}' 相关的结果")
         return
 
-    ui(f"\n找到 {len(results)} 条网页搜索结果")
+def _terminal_preview(text: str, *, max_chars: int) -> tuple[str, bool]:
+    body = (text or "").strip()
+    if not body:
+        return "", False
+    if max_chars < 1 or len(body) <= max_chars:
+        return body, False
+    return body[:max_chars].rstrip(), True
 
 
 def cmd_webextract(args: argparse.Namespace, cfg) -> None:
@@ -2515,6 +2520,8 @@ def cmd_webextract(args: argparse.Namespace, cfg) -> None:
 
     url = args.url
     pdf = args.pdf
+    full = getattr(args, "full", False)
+    max_chars = max(1, int(getattr(args, "max_chars", 4000) or 4000))
 
     try:
         result = webtools.extract_web(url, pdf=pdf, cfg=cfg)
@@ -2529,8 +2536,14 @@ def cmd_webextract(args: argparse.Namespace, cfg) -> None:
     title = result.get("title", "")
     text = result.get("text", "")
     ui(f"提取成功: {title or url}")
-    if text:
-        print(text)
+    if not text:
+        return
+
+    output_text, truncated = (text.strip(), False) if full else _terminal_preview(text, max_chars=max_chars)
+    if output_text:
+        print(output_text)
+    if truncated:
+        ui(f"内容较长，已截断显示前 {len(output_text)} / {len(text.strip())} 个字符；使用 --full 查看全文")
 
 
 def cmd_ingest_link(args: argparse.Namespace, cfg) -> None:
@@ -3817,6 +3830,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p_wext.set_defaults(func=cmd_webextract)
     p_wext.add_argument("url", help="要提取的网页 URL")
     p_wext.add_argument("--pdf", action="store_true", help="目标为 PDF 文件")
+    p_wext.add_argument("--full", action="store_true", help="输出完整提取结果，不截断")
+    p_wext.add_argument("--max-chars", type=int, default=4000, help="预览模式最大输出字符数（默认 4000）")
 
     # --- ingest-link ---
     p_ingest_link = sub.add_parser("ingest-link", help="抓取渲染后的网页/在线 PDF，并按文档流程直接入库")

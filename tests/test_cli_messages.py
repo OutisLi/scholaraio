@@ -126,6 +126,68 @@ class TestWebsearchCli:
         assert any("错误: service down" in message for message in messages)
         assert any("GUILessBingSearch" in message for message in messages)
 
+    def test_cmd_websearch_does_not_repeat_success_summary(self, monkeypatch):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        monkeypatch.setattr(
+            webtools,
+            "search_and_display",
+            lambda *args, **kwargs: [
+                webtools.WebSearchResult(title="OpenAI", link="https://openai.com", snippet="AI research")
+            ],
+        )
+
+        args = Namespace(query=["openai"], count=1)
+        cli.cmd_websearch(args, SimpleNamespace())
+
+        assert messages == []
+
+
+class TestWebextractCli:
+    def test_cmd_webextract_truncates_long_text_by_default(self, monkeypatch, capsys):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            webtools,
+            "extract_web",
+            lambda *args, **kwargs: {"title": "Page", "text": "abcdefghijklmnopqrstuvwxyz"},
+        )
+
+        args = Namespace(url="https://example.com", pdf=False, full=False, max_chars=10)
+        cli.cmd_webextract(args, SimpleNamespace())
+
+        captured = capsys.readouterr()
+
+        assert any("提取成功: Page" in message for message in messages)
+        assert any("已截断" in message for message in messages)
+        assert "abcdefghij" in captured.out
+        assert "klmnopqrstuvwxyz" not in captured.out
+
+    def test_cmd_webextract_full_prints_complete_text(self, monkeypatch, capsys):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            webtools,
+            "extract_web",
+            lambda *args, **kwargs: {"title": "Page", "text": "abcdefghijklmnopqrstuvwxyz"},
+        )
+
+        args = Namespace(url="https://example.com", pdf=False, full=True, max_chars=10)
+        cli.cmd_webextract(args, SimpleNamespace())
+
+        captured = capsys.readouterr()
+
+        assert any("提取成功: Page" in message for message in messages)
+        assert all("已截断" not in message for message in messages)
+        assert "abcdefghijklmnopqrstuvwxyz" in captured.out
+
 
 class TestShowLayer4Headings:
     def test_translated_full_text_heading_uses_consistent_spacing(self, tmp_papers, monkeypatch):
