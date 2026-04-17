@@ -20,10 +20,7 @@ import logging
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING
-
-from scholaraio.log import ui
 
 if TYPE_CHECKING:
     from scholaraio.config import Config

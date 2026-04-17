@@ -2577,7 +2577,7 @@ def cmd_ingest_link(args: argparse.Namespace, cfg) -> None:
 
 
 def cmd_patent_fetch(args: argparse.Namespace, cfg) -> None:
-    """从 Google Patents 下载专利 PDF."""
+    """下载专利 PDF 到 inbox-patent."""
     from scholaraio import patent_fetch
 
     id_or_url = args.id_or_url
@@ -2604,9 +2604,7 @@ def cmd_patent_search(args: argparse.Namespace, cfg) -> None:
             ui("按申请号精确查询请使用 --source odp（需要配置 USPTO ODP API Key）")
             sys.exit(1)
         try:
-            result = uspto_odp.get_patent_by_application_number(
-                app_number, cfg=cfg
-            )
+            result = uspto_odp.get_patent_by_application_number(app_number, cfg=cfg)
         except uspto_odp.USPTOAPIError as e:
             ui(f"查询失败: {e}")
             sys.exit(1)
@@ -2643,9 +2641,7 @@ def cmd_patent_search(args: argparse.Namespace, cfg) -> None:
 
     if source == "odp":
         try:
-            results = uspto_odp.search_patents(
-                query, limit=count, offset=offset, cfg=cfg
-            )
+            results = uspto_odp.search_patents(query, limit=count, offset=offset, cfg=cfg)
         except uspto_odp.USPTOAPIError as e:
             ui(f"搜索失败: {e}")
             sys.exit(1)
@@ -3908,55 +3904,31 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ingest_link.add_argument("--json", action="store_true", help="输出抓取结果摘要 JSON")
 
     # --- patent-fetch ---
-    p_patent_fetch = sub.add_parser(
-        "patent-fetch", help="从 Google Patents 下载专利 PDF"
-    )
+    p_patent_fetch = sub.add_parser("patent-fetch", help="下载专利 PDF 到 data/inbox-patent/")
     p_patent_fetch.set_defaults(func=cmd_patent_fetch)
     p_patent_fetch.add_argument(
         "id_or_url",
-        help="专利 ID（如 US20240176406A1）或完整的 Google Patents URL",
+        help="专利公开号（如 US20240176406A1）或专利页面 URL",
     )
 
     # --- patent-search ---
-    p_patent = sub.add_parser(
-        "patent-search",
-        help="USPTO 专利搜索（PPUBS，无需 API Key）"
-    )
+    p_patent = sub.add_parser("patent-search", help="USPTO 专利搜索（PPUBS，无需 API Key）")
     p_patent.set_defaults(func=cmd_patent_search)
+    p_patent.add_argument("query", nargs="*", help='搜索查询词（PPUBS 字段语法如 ("keyword").title.）')
     p_patent.add_argument(
-        "query",
-        nargs="*",
-        help="搜索查询词（PPUBS 字段语法如 (\"keyword\").title.）"
+        "--application", "-a", type=str, default=None, help="按申请号查询详情（如 17123456），需配合 --source odp 使用"
     )
-    p_patent.add_argument(
-        "--application", "-a",
-        type=str,
-        default=None,
-        help="按申请号查询详情（如 17123456），需配合 --source odp 使用"
-    )
-    p_patent.add_argument(
-        "--count", "-c",
-        type=int,
-        default=10,
-        help="返回结果数量（默认 10）"
-    )
-    p_patent.add_argument(
-        "--offset", "-o",
-        type=int,
-        default=0,
-        help="分页偏移（默认 0）"
-    )
+    p_patent.add_argument("--count", "-c", type=int, default=10, help="返回结果数量（默认 10）")
+    p_patent.add_argument("--offset", "-o", type=int, default=0, help="分页偏移（默认 0）")
     p_patent.add_argument(
         "--source",
         type=str,
         choices=["ppubs", "odp"],
         default="ppubs",
-        help="搜索源：ppubs（默认，无需 API Key）或 odp（需要 API Key）"
+        help="搜索源：ppubs（默认，无需 API Key）或 odp（需要 API Key）",
     )
     p_patent.add_argument(
-        "--fetch", "-f",
-        action="store_true",
-        help="搜索后自动下载所有结果中的专利 PDF 到 data/inbox-patent/"
+        "--fetch", "-f", action="store_true", help="搜索后自动下载所有结果中的专利 PDF 到 data/inbox-patent/"
     )
 
     # --- insights ---

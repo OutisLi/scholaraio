@@ -20,16 +20,25 @@ uspto_ppubs.py — USPTO Patent Public Search (PPUBS) 客户端
 
 from __future__ import annotations
 
+import http.cookiejar
 import json
 import logging
+import re
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from html import unescape
+from pathlib import Path
 from typing import Any
 
 _log = logging.getLogger(__name__)
 
 PPUBS_BASE_URL = "https://ppubs.uspto.gov"
+US_PUBLICATION_NUMBER_PATTERN = re.compile(
+    r"^US(?P<number>\d{6,})(?P<kind>[A-Z]\d?)?$",
+    re.IGNORECASE,
+)
 
 
 class PpubsError(Exception):
@@ -53,6 +62,7 @@ class PpubsPatent:
     publication_date: str = ""  # YYYY-MM-DD
     patent_type: str = ""  # US-PGPUB or USPAT
     page_count: int = 0
+    image_location: str = ""
     ipc_codes: list[str] = field(default_factory=list)
     cpc_codes: list[str] = field(default_factory=list)
     primary_examiner: str = ""
@@ -89,6 +99,7 @@ class PpubsPatent:
             "publication_date": self.publication_date,
             "patent_type": self.patent_type,
             "page_count": self.page_count,
+            "image_location": self.image_location,
             "ipc_codes": self.ipc_codes,
             "cpc_codes": self.cpc_codes,
         }
@@ -112,7 +123,8 @@ class PpubsClient:
 
     def __init__(self, base_url: str = PPUBS_BASE_URL) -> None:
         self.base_url = base_url.rstrip("/")
-        self._opener = urllib.request.build_opener()
+        self._cookie_jar = http.cookiejar.CookieJar()
+        self._opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self._cookie_jar))
         self._token: str | None = None
         self._case_id: int | None = None
 
@@ -157,38 +169,80 @@ class PpubsClient:
 
         _log.debug("PPUBS session established: caseId=%s", self._case_id)
 
-    def _request(self, method: str, url: str, data: dict | None = None) -> dict:
-        """执行带自动会话刷新的请求。"""
+    def _request_bytes(
+        self,
+        method: str,
+        url: str,
+        data: dict | list | None = None,
+    ) -> bytes:
+        """执行带自动会话刷新的请求并返回原始 bytes。"""
         self._ensure_session()
 
         body = json.dumps(data).encode("utf-8") if data is not None else None
-        req = urllib.request.Request(url, data=body, method=method)
-        req.add_header("X-Access-Token", self._token or "")
-        req.add_header("Content-Type", "application/json")
-        req.add_header("referer", f"{self.base_url}/pubwebapp/")
+        for attempt in range(3):
+            req = urllib.request.Request(url, data=body, method=method)
+            req.add_header("X-Access-Token", self._token or "")
+            req.add_header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            )
+            req.add_header("referer", f"{self.base_url}/pubwebapp/")
+            req.add_header("Origin", self.base_url)
+            req.add_header("X-Requested-With", "XMLHttpRequest")
+            if data is not None:
+                req.add_header("Content-Type", "application/json")
 
-        try:
-            with self._opener.open(req) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            if e.code == 403:
-                # Session expired, refresh and retry once
-                _log.debug("PPUBS session expired, refreshing")
-                self._token = None
-                self._case_id = None
-                self._ensure_session()
-                req.add_header("X-Access-Token", self._token or "")
-                with self._opener.open(req) as resp:
-                    return json.loads(resp.read().decode("utf-8"))
             try:
-                detail = e.read().decode("utf-8")
-            except Exception:
-                detail = ""
-            raise PpubsError(f"HTTP {e.code}: {detail}") from e
-        except urllib.error.URLError as e:
-            raise PpubsError(f"Request failed: {e.reason}") from e
+                with self._opener.open(req) as resp:
+                    return resp.read()
+            except urllib.error.HTTPError as e:
+                if e.code == 403 and attempt < 2:
+                    _log.debug("PPUBS session expired, refreshing")
+                    self._token = None
+                    self._case_id = None
+                    self._ensure_session()
+                    continue
+                try:
+                    detail = e.read().decode("utf-8", "replace")
+                except Exception:
+                    detail = ""
+                raise PpubsError(f"HTTP {e.code}: {detail}") from e
+            except urllib.error.URLError as e:
+                if attempt == 0:
+                    _log.debug("Transient PPUBS request failure, retrying: %s", e.reason)
+                    time.sleep(0.2)
+                    continue
+                raise PpubsError(f"Request failed: {e.reason}") from e
+
+        raise PpubsError("PPUBS request failed after session refresh")
+
+    def _request_text(
+        self,
+        method: str,
+        url: str,
+        data: dict | list | None = None,
+    ) -> str:
+        """执行请求并返回 UTF-8 文本。"""
+        return self._request_bytes(method, url, data).decode("utf-8", "replace")
+
+    def _request_json(
+        self,
+        method: str,
+        url: str,
+        data: dict | list | None = None,
+    ) -> dict | list:
+        """执行请求并返回 JSON。"""
+        try:
+            return json.loads(self._request_text(method, url, data))
         except json.JSONDecodeError as e:
             raise PpubsError(f"Invalid JSON response: {e}") from e
+
+    def _request(self, method: str, url: str, data: dict | None = None) -> dict:
+        """执行带自动会话刷新的 JSON 请求。"""
+        result = self._request_json(method, url, data)
+        if not isinstance(result, dict):
+            raise PpubsError(f"Expected JSON object from PPUBS, got {type(result).__name__}")
+        return result
 
     def search(
         self,
@@ -228,9 +282,7 @@ class PpubsClient:
             "viewName": "tile",
             "plurals": True,
             "britishEquivalents": True,
-            "databaseFilters": [
-                {"databaseName": s, "countryCodes": []} for s in sources
-            ],
+            "databaseFilters": [{"databaseName": s, "countryCodes": []} for s in sources],
             "searchType": 1,
             "ignorePersist": True,
             "userEnteredQuery": query,
@@ -264,6 +316,114 @@ class PpubsClient:
         _log.debug("PPUBS returned %d / %d results", len(patents), total)
         return total, [_extract_patent(p) for p in patents]
 
+    def find_by_publication_number(
+        self,
+        publication_number: str,
+        *,
+        limit: int = 10,
+    ) -> PpubsPatent | None:
+        """按公开号定位唯一专利条目。"""
+        normalized = _normalize_publication_number(publication_number)
+        if not normalized:
+            return None
+
+        query = _publication_search_query(normalized)
+        _, results = self.search(query, limit=limit)
+        for patent in results:
+            if _normalize_publication_number(patent.publication_number) == normalized:
+                return patent
+        return None
+
+    def download_pdf(
+        self,
+        patent: PpubsPatent,
+        out_file: str | Path,
+        *,
+        timeout: float = 120.0,
+        poll_interval: float = 1.0,
+    ) -> Path:
+        """通过 PPUBS 官方导出接口下载 PDF。"""
+        self._ensure_session()
+
+        if not patent.guid:
+            raise PpubsError("PPUBS patent entry is missing guid")
+        if not patent.image_location:
+            raise PpubsError("PPUBS patent entry is missing imageLocation")
+        if patent.page_count <= 0:
+            raise PpubsError("PPUBS patent entry returned invalid pageCount")
+
+        page_keys = [f"{patent.image_location}/{i:08d}.tif" for i in range(1, patent.page_count + 1)]
+        job_id = (
+            self._request_text(
+                "POST",
+                f"{self.base_url}/api/print/imageviewer",
+                {
+                    "caseId": self._case_id,
+                    "pageKeys": page_keys,
+                    "patentGuid": patent.guid,
+                    "saveOrPrint": "save",
+                    "source": patent.patent_type,
+                },
+            )
+            .strip()
+            .strip('"')
+        )
+        if not job_id:
+            raise PpubsError("PPUBS print job did not return a job id")
+
+        deadline = time.monotonic() + timeout
+        pdf_name = ""
+        while time.monotonic() < deadline:
+            status_data = self._request_json(
+                "POST",
+                f"{self.base_url}/api/print/print-process",
+                [job_id],
+            )
+            if not isinstance(status_data, list) or not status_data:
+                raise PpubsError("PPUBS print status returned an empty response")
+
+            status = status_data[0]
+            if status.get("printStatus") == "COMPLETED" and status.get("pdfName"):
+                pdf_name = str(status["pdfName"])
+                break
+            if status.get("printStatus") == "FAILED":
+                raise PpubsError(f"PPUBS print job failed: {status}")
+            time.sleep(poll_interval)
+
+        if not pdf_name:
+            raise PpubsError("Timed out waiting for PPUBS PDF export")
+
+        pdf_bytes = self._request_bytes(
+            "GET",
+            f"{self.base_url}/api/print/save/{pdf_name}",
+        )
+        out_path = Path(out_file)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(pdf_bytes)
+        return out_path
+
+
+def _normalize_publication_number(publication_number: str) -> str:
+    """标准化公开号，移除分隔符并转成大写。"""
+    return re.sub(r"[^A-Za-z0-9]", "", str(publication_number or "")).upper()
+
+
+def _publication_search_query(publication_number: str) -> str:
+    """生成更稳定的 PPUBS 检索词。"""
+    normalized = _normalize_publication_number(publication_number)
+    match = US_PUBLICATION_NUMBER_PATTERN.match(normalized)
+    if match:
+        return match.group("number")
+    return normalized
+
+
+def _strip_markup(text: str) -> str:
+    """移除 PPUBS 返回的高亮 HTML 标记。"""
+    if not text:
+        return ""
+    plain = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\s+", " ", unescape(plain)).strip()
+
 
 def _extract_patent(item: dict) -> PpubsPatent:
     """从 PPUBS 搜索响应中提取 PpubsPatent。"""
@@ -274,16 +434,15 @@ def _extract_patent(item: dict) -> PpubsPatent:
 
     publication_number = ""
     if pub_num_raw and patent_type:
+        kind = ""
+        if item.get("kindCode"):
+            kind = item["kindCode"][0] if isinstance(item["kindCode"], list) else item["kindCode"]
         if patent_type == "US-PGPUB":
-            # Pre-grant publication: prefix with US and suffix with A1
-            publication_number = f"US{pub_num_raw}A1"
+            publication_number = f"US{pub_num_raw}{kind or 'A1'}"
         elif patent_type == "USPAT":
-            kind = "B2"
-            if item.get("kindCode"):
-                kind = item["kindCode"][0] if isinstance(item["kindCode"], list) else item["kindCode"]
-            publication_number = f"US{pub_num_raw}{kind}"
+            publication_number = f"US{pub_num_raw}{kind or 'B2'}"
         else:
-            publication_number = f"US{pub_num_raw}"
+            publication_number = f"US{pub_num_raw}{kind}"
 
     # Parse dates
     pub_date = item.get("datePublished", "")
@@ -291,7 +450,11 @@ def _extract_patent(item: dict) -> PpubsPatent:
         pub_date = pub_date[:10]  # YYYY-MM-DD
     filing_date = ""
     if item.get("applicationFilingDate"):
-        filing_date = item["applicationFilingDate"][0][:10] if isinstance(item["applicationFilingDate"], list) else str(item["applicationFilingDate"])[:10]
+        filing_date = (
+            item["applicationFilingDate"][0][:10]
+            if isinstance(item["applicationFilingDate"], list)
+            else str(item["applicationFilingDate"])[:10]
+        )
 
     # IPC / CPC
     ipc = []
@@ -312,7 +475,7 @@ def _extract_patent(item: dict) -> PpubsPatent:
     return PpubsPatent(
         guid=item.get("guid", ""),
         publication_number=publication_number,
-        title=item.get("inventionTitle", ""),
+        title=_strip_markup(str(item.get("inventionTitle", ""))),
         inventors_short=item.get("inventorsShort", ""),
         applicants=applicants,
         assignees=assignees,
@@ -321,6 +484,7 @@ def _extract_patent(item: dict) -> PpubsPatent:
         publication_date=pub_date,
         patent_type=patent_type,
         page_count=int(item.get("pageCount", 0) or 0),
+        image_location=str(item.get("imageLocation", "")),
         ipc_codes=ipc,
         cpc_codes=cpc,
         primary_examiner=str(item.get("primaryExaminer", "")),

@@ -629,6 +629,7 @@ def _build_config(data: dict, root: Path) -> Config:
     paths_data = data.get("paths", {}) or {}
     llm_data = data.get("llm", {}) or {}
     ingest_data = data.get("ingest", {}) or {}
+    patent_data = data.get("patent", {}) or {}
 
     paths = PathsConfig(
         papers_dir=paths_data.get("papers_dir", "data/papers"),
@@ -771,6 +772,10 @@ def _build_config(data: dict, root: Path) -> Config:
         library_type=zotero_data.get("library_type", "user"),
     )
 
+    patent = PatentConfig(
+        uspto_odp_api_key=patent_data.get("uspto_odp_api_key") or "",
+    )
+
     return Config(
         paths=paths,
         llm=llm,
@@ -781,6 +786,7 @@ def _build_config(data: dict, root: Path) -> Config:
         log=log,
         translate=translate,
         zotero=zotero,
+        patent=patent,
         _root=root,
     )
 

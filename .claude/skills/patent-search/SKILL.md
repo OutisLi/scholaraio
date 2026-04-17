@@ -148,14 +148,15 @@ scholaraio search "quantum computing"
 - 客户端会自动刷新会话并重试，通常无需手动处理
 - 若频繁失败，可能是网络波动，稍后再试
 
-**Google Patents 下载失败**
-- 该专利可能尚未上传 PDF（如非常新的 WO 专利）
-- 尝试在浏览器中打开 Google Patents 页面确认
-- 部分专利不提供 Google Patents 直接下载，需要换源（如 USPTO、EPO）
+**patent-fetch 下载失败**
+- 美国专利会优先尝试 USPTO PPUBS 官方导出；若失败再回退 Google Patents
+- 该专利可能尚未提供可导出的 PDF（如非常新的 WO 专利）
+- 尝试在浏览器中打开专利页面确认
+- 部分专利需要换源（如 EPO）
 
 ## 相关功能
 
-- `scholaraio patent-fetch` — 从 Google Patents 下载指定专利 PDF
+- `scholaraio patent-fetch` — 下载指定专利 PDF 到 `data/inbox-patent/`
 - `scholaraio arxiv` — arXiv 论文搜索与下载
 - `scholaraio websearch` — 实时网页搜索
 - `scholaraio pipeline ingest` — 将 inbox-patent 中的 PDF 入库

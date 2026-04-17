@@ -1,22 +1,23 @@
 ---
 name: patent-fetch
-description: 从 Google Patents 页面提取 PDF 链接并下载到 inbox-patent 文件夹，与 patent-search 无缝联动
+description: 优先通过 USPTO PPUBS 官方导出接口下载美国专利 PDF，必要时回退 Google Patents，并保存到 inbox-patent
 version: 1.1.0
 author: Claude
 tier: utility
 destructive: false
 ---
 
-# patent-fetch — Google Patents 专利 PDF 下载
+# patent-fetch — 专利 PDF 下载
 
-从 Google Patents 页面提取 PDF 下载链接，并自动下载到 `data/inbox-patent/` 目录，供后续 `pipeline ingest` 入库。
+优先通过 USPTO PPUBS 官方导出接口下载美国专利 PDF，并在必要时回退到 Google Patents 页面抓取，自动保存到 `data/inbox-patent/` 目录，供后续 `pipeline ingest` 入库。
 
 常与 `patent-search` 配合使用：先用 `patent-search` 发现专利，再用 `patent-fetch` 或 `--fetch` 参数下载 PDF。
 
 ## 功能
 
-- **专利 ID 直输**：只需输入专利公开号（如 `US20240176406A1`），自动构造 Google Patents URL
-- **完整 URL 支持**：也支持直接传入完整的 Google Patents 页面链接
+- **专利 ID 直输**：只需输入专利公开号（如 `US20240176406A1`），优先走 USPTO 官方导出
+- **完整 URL 支持**：也支持直接传入完整的专利页面链接
+- **官方下载优先**：美国专利优先走 PPUBS 导出，避免 Google 页面抓取不稳定
 - **自动去重**：如果目标文件已存在，跳过下载
 - **仅用于发现下载**：不入库，下载后需手动执行 `scholaraio pipeline ingest` 走专利入库流程
 
@@ -93,14 +94,14 @@ scholaraio pipeline ingest
 
 ## 故障排除
 
-**页面请求超时**
-- 检查网络连接和代理设置
-- Google Patents 在某些网络环境下可能需要配置 HTTP 代理
+**页面请求超时或下载失败**
+- 美国专利默认优先走 USPTO PPUBS 官方导出，通常不需要额外代理
+- 若已回退到 Google Patents，某些网络环境下可能需要配置 HTTP 代理
 
 **未在该页面找到 PDF 下载链接**
 - 该专利可能尚未上传 PDF（如非常新的 WO 专利）
-- 尝试在浏览器中打开页面确认是否有 "Download PDF" 按钮
-- 部分专利确实不提供 Google Patents 直接下载，需要换源（如 USPTO、EPO）
+- 尝试在浏览器中打开页面确认是否有 PDF 下载入口
+- 部分非美国专利或特殊文档类型可能需要换源（如 EPO）
 
 **下载失败**
 - 检查 `data/inbox-patent/` 目录是否有写入权限
