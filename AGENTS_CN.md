@@ -61,11 +61,13 @@ Skills 定义在 `.claude/skills/` 目录，遵循 [Agent Skills](https://agents
 - `import` — 当用户要从 Endnote、Zotero 或已有 PDF 补充知识库时，用这个 skill。
 - `rename` — 当用户要把论文目录统一成规范命名时，用这个 skill。
 - `audit` — 当用户要查数据质量、找缺失项、重复项或批量修复元数据时，用这个 skill。
+- `scrub` — 当用户要在 enrich 之后增量清洗和修复低质量元数据，尤其是非标准文档产生的坏标题、坏作者和缺少年份时，用这个 skill。
 - `translate` — 当用户要把论文翻译到目标语言并保留 Markdown 结构时，用这个 skill。
 
 学术写作：
 - `academic-writing` — 当用户还不确定该用哪条学术写作工作流，或任务是按交付物来定义的（综述、论文章节、rebuttal、PPT、海报、技术调研报告等）时，用这个 skill 做总入口和分流。
 - `literature-review` — 当用户要写文献综述、组织主题并形成批判性叙述时，用这个 skill。
+- `paper-guided-reading` — 当用户想从模糊关键词或研究问题出发，先锁定目标论文，再做单篇引导式精读时，用这个 skill。
 - `paper-writing` — 当用户要起草论文具体章节而不是泛泛总结时，用这个 skill。
 - `citation-check` — 当用户担心引用不实、作者年份不对或 AI 幻觉引用时，用这个 skill。
 - `writing-polish` — 当用户要润色学术表达、去 AI 味或做风格迁移时，用这个 skill。
@@ -190,7 +192,7 @@ CLI 命令一览：`scholaraio --help`
 除 skills 之外，当前 CLI 还提供一些值得直接利用的重要能力：
 - 检索相关：`search-author`、`embed`、`vsearch`、`usearch`、`fsearch`、`top-cited`
 - 图谱相关：`refs`、`citing`、`shared-refs`
-- 富化/修复：`enrich-toc`、`enrich-l3`、`backfill-abstract`、`refetch`、`repair`
+- 富化/修复：`enrich-toc`、`enrich-l3`、`backfill-abstract`、`refetch`（引用量 / references）、`repair`
 - 数据维护：`attach-pdf`
 - 工作区：`ws`（init / add / remove / show / search / export 等子命令）
 - 外部发现与科学运行时：`arxiv`、`toolref`、`insights`、`style`、`document`
@@ -330,7 +332,7 @@ data/inbox-doc/
 
 超长 PDF 会在 MinerU 转换前按需自动切分：
 - 本地 MinerU 遵循 `chunk_page_limit`（默认 >100 页）
-- MinerU 云端同时遵循其官方约束（>600 页或 >200MB），若仅超出文件大小限制，会根据平均每页大小估算更安全的分片页数
+- MinerU 云端当前需要按更严格的有效阈值自动切分（>200 页或 >200MB），因为 `mineru-open-api extract` 现网在 PDF 超过 200 页时会直接返回 `-60006`，即使网页文档仍可能写 600 页
 
 ### data/pending/ 目录
 

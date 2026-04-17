@@ -373,6 +373,49 @@ class TestRefetchMetadata:
         assert data["citation_count"] == original["citation_count"]
         assert data["api_sources"] == original["api_sources"]
 
+    def test_refetch_references_only_updates_references_without_touching_other_metadata(self, tmp_path, monkeypatch):
+        paper_dir = tmp_path / "papers" / "Smith-2024-Test-Paper"
+        paper_dir.mkdir(parents=True)
+        json_path = paper_dir / "meta.json"
+        original = {
+            "id": "paper-1",
+            "title": "Test Paper",
+            "authors": ["Alice Smith"],
+            "first_author": "Alice Smith",
+            "first_author_lastname": "Smith",
+            "year": 2024,
+            "doi": "10.1234/test",
+            "journal": "JFM",
+            "abstract": "Old abstract",
+            "paper_type": "article",
+            "citation_count": {"crossref": 5, "semantic_scholar": 7},
+            "ids": {"doi": "10.1234/test", "semantic_scholar": "s2-1"},
+            "api_sources": ["crossref", "semantic_scholar"],
+            "references": [],
+        }
+        json_path.write_text(json.dumps(original), encoding="utf-8")
+
+        monkeypatch.setattr(
+            "scholaraio.ingest.metadata._api.query_semantic_scholar",
+            lambda **kwargs: {"references": [{"externalIds": {"DOI": "10.9999/ref-a"}}]},
+        )
+        monkeypatch.setattr(
+            "scholaraio.ingest.metadata._api.query_crossref",
+            lambda **kwargs: {
+                "reference": [{"DOI": "10.9999/ref-b"}],
+            },
+        )
+
+        changed = refetch_metadata(json_path, references_only=True)
+
+        assert changed is True
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+        assert data["references"] == ["10.9999/ref-a"]
+        assert data["title"] == original["title"]
+        assert data["abstract"] == original["abstract"]
+        assert data["citation_count"] == original["citation_count"]
+        assert data["api_sources"] == original["api_sources"]
+
     def test_rename_collision_avoidance(self, tmp_path):
         papers = tmp_path / "papers"
         old_dir = papers / "wrong-name"
@@ -404,6 +447,75 @@ class TestRefetchMetadata:
         result = rename_paper(old_dir / "meta.json", dry_run=True)
         assert result is not None
         assert old_dir.exists()  # original not moved
+
+    def test_collision_suffix_name_is_idempotent(self, tmp_path):
+        papers = tmp_path / "papers"
+        (papers / "Smith-2023-Test").mkdir(parents=True)
+        suffixed_dir = papers / "Smith-2023-Test-2"
+        suffixed_dir.mkdir(parents=True)
+        (suffixed_dir / "meta.json").write_text(
+            json.dumps(
+                {
+                    "id": "test-uuid",
+                    "title": "Test",
+                    "first_author_lastname": "Smith",
+                    "year": 2023,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = rename_paper(suffixed_dir / "meta.json")
+
+        assert result is None
+        assert suffixed_dir.exists()
+
+    def test_collision_suffix_reclaims_canonical_name_when_available(self, tmp_path):
+        papers = tmp_path / "papers"
+        suffixed_dir = papers / "Smith-2023-Test-2"
+        suffixed_dir.mkdir(parents=True)
+        (suffixed_dir / "meta.json").write_text(
+            json.dumps(
+                {
+                    "id": "test-uuid",
+                    "title": "Test",
+                    "first_author_lastname": "Smith",
+                    "year": 2023,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = rename_paper(suffixed_dir / "meta.json")
+
+        assert result is not None
+        assert result.parent.name == "Smith-2023-Test"
+        assert result.parent.exists()
+        assert not suffixed_dir.exists()
+
+    def test_numeric_old_name_is_re_normalized_to_smallest_collision_suffix(self, tmp_path):
+        papers = tmp_path / "papers"
+        (papers / "Smith-2023-Test").mkdir(parents=True)
+        numeric_dir = papers / "Smith-2023-Test-2024"
+        numeric_dir.mkdir(parents=True)
+        (numeric_dir / "meta.json").write_text(
+            json.dumps(
+                {
+                    "id": "test-uuid",
+                    "title": "Test",
+                    "first_author_lastname": "Smith",
+                    "year": 2023,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = rename_paper(numeric_dir / "meta.json")
+
+        assert result is not None
+        assert result.parent.name == "Smith-2023-Test-2"
+        assert result.parent.exists()
+        assert not numeric_dir.exists()
 
 
 class TestMetadataToDictWebFields:

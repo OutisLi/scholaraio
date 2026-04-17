@@ -103,7 +103,7 @@ def write_metadata_json(meta: PaperMetadata, output_path: Path) -> None:
 # ============================================================================
 
 
-def refetch_metadata(json_path: Path) -> bool:
+def refetch_metadata(json_path: Path, *, references_only: bool = False) -> bool:
     """对已入库论文重新查询 API，补全引用量等字段。
 
     从 JSON 反构造 :class:`PaperMetadata`，调用 :func:`enrich_metadata`
@@ -116,9 +116,24 @@ def refetch_metadata(json_path: Path) -> bool:
     Returns:
         ``True`` 表示有字段被更新，``False`` 表示无变化或查询失败。
     """
-    from ._api import enrich_metadata
+    from ._api import _collect_reference_dois, enrich_metadata, query_crossref, query_semantic_scholar
 
     data = json.loads(json_path.read_text(encoding="utf-8"))
+
+    if references_only:
+        doi = str(data.get("doi") or "").strip()
+        if not doi:
+            return False
+        cr_data = query_crossref(doi=doi)
+        s2_data = query_semantic_scholar(doi=doi)
+        ref_dois = _collect_reference_dois(cr_data, s2_data)
+        if not ref_dois or ref_dois == (data.get("references") or []):
+            return False
+        data["references"] = ref_dois
+        from scholaraio.papers import write_meta
+
+        write_meta(json_path.parent, data)
+        return True
 
     meta = PaperMetadata(
         id=data.get("id", ""),
@@ -294,15 +309,18 @@ def rename_paper(json_path: Path, *, dry_run: bool = False) -> Path | None:
     new_dir = papers_root / new_stem
 
     # Avoid collision with existing directories
-    if new_dir.exists():
+    if new_dir.exists() and new_dir != paper_d:
         suffix = 2
         while True:
             candidate = f"{new_stem}-{suffix}"
-            if not (papers_root / candidate).exists():
-                new_stem = candidate
-                new_dir = papers_root / new_stem
+            candidate_dir = papers_root / candidate
+            if candidate_dir == paper_d or not candidate_dir.exists():
+                new_dir = candidate_dir
                 break
             suffix += 1
+
+    if new_dir == paper_d:
+        return None
 
     if dry_run:
         return new_dir / "meta.json"
@@ -415,6 +433,13 @@ def rename_files(md_path: Path, json_path: Path, new_stem: str, dry_run: bool = 
 
     if paper_d != new_dir:
         paper_d.rename(new_dir)
+        try:
+            data = json.loads(new_json.read_text(encoding="utf-8"))
+            uuid = str(data.get("id") or "").strip()
+            if uuid:
+                _update_registry_dir_name(papers_root.parent / "index.db", uuid, new_dir.name)
+        except Exception as e:
+            _log.debug("failed to update papers_registry during rename_files: %s", e)
     _log.debug("renamed dir: %s -> %s", paper_d.name, new_dir.name)
     return new_md, new_json
 

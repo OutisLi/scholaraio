@@ -63,11 +63,13 @@ Knowledge base management:
 - `import` - When the user wants to bring in Endnote, Zotero, or existing PDFs, use this skill.
 - `rename` - When the user wants to normalize paper directory names, use this skill.
 - `audit` - When the user wants to inspect data quality, find missing fields or duplicates, or batch-repair metadata, use this skill.
+- `scrub` - When the user wants to incrementally review and repair low-quality metadata after enrich, especially for non-standard documents, use this skill.
 - `translate` - When the user wants to translate papers into a target language while keeping Markdown structure, use this skill.
 
 Academic writing:
 - `academic-writing` - When the user needs help choosing or organizing the right academic-writing workflow by deliverable or final format (review, paper section, rebuttal, PPT, poster, technical report), use this skill as the router.
 - `literature-review` - When the user wants to write a literature review, organize topics, and build a critical narrative, use this skill.
+- `paper-guided-reading` - When the user wants guided deep reading of a single paper starting from fuzzy keywords or a research question, use this skill.
 - `paper-writing` - When the user wants to draft concrete paper sections rather than a generic summary, use this skill.
 - `citation-check` - When the user is worried about fake citations, wrong author-year pairs, or AI citation hallucinations, use this skill.
 - `writing-polish` - When the user wants academic polishing, de-AI-fication, or style transfer, use this skill.
@@ -82,6 +84,7 @@ Visualization and document generation:
 
 System operations:
 - `setup` - When the user wants to install, configure, or diagnose the ScholarAIO environment, start with this skill.
+- `backup` - When the user wants to sync ScholarAIO data to a configured remote machine via rsync, use this skill.
 - `metrics` - When the user wants token usage, call timing, or runtime metrics, use this skill.
 
 Scientific computing:
@@ -194,7 +197,7 @@ CLI command reference: `scholaraio --help`
 Besides skills, the current CLI also provides several important capabilities worth using directly:
 - Retrieval-related: `search-author`, `embed`, `vsearch`, `usearch`, `fsearch`, `top-cited`
 - Graph-related: `refs`, `citing`, `shared-refs`
-- Enrichment and repair: `enrich-toc`, `enrich-l3`, `backfill-abstract`, `refetch`, `repair`
+- Enrichment and repair: `enrich-toc`, `enrich-l3`, `backfill-abstract`, `refetch` (citation counts / references), `repair`
 - Data maintenance: `attach-pdf`, `ingest-link`
 - Workspace: `ws` (subcommands such as `init`, `add`, `remove`, `show`, `search`, `export`, and more)
 - Proceedings: `proceedings` (`apply-split`, `build-clean-candidates`, `apply-clean`) and `fsearch --scope proceedings`
@@ -335,7 +338,7 @@ Non-paper document ingest flow:
 
 Very long PDFs are split automatically before MinerU conversion when needed:
 - local MinerU follows `chunk_page_limit` (default: more than 100 pages)
-- MinerU cloud follows the stricter of its documented limits (more than 600 pages or 200MB) and estimates a safe chunk size when only the file-size limit is exceeded
+- MinerU cloud currently needs a stricter effective limit of more than 200 pages or 200MB for auto-splitting, because `mineru-open-api extract` now returns `-60006` once a PDF exceeds 200 pages even though the web docs may still mention 600 pages
 
 ### `data/inbox-proceedings/` Directory
 
@@ -482,7 +485,7 @@ The exact invocation form of skills depends on the host agent or plugin system; 
 
 - **LLM key** (DeepSeek / OpenAI / Anthropic / Google): required for metadata extraction and content enrichment. Without it, the system degrades to pure regex mode and enrich features are unavailable. This is usually billed separately by the chosen provider; do not assume an agent subscription automatically covers ScholarAIO API calls
 - **MinerU token**: used by `mineru-open-api extract` for MinerU cloud PDF-to-Markdown conversion. `MINERU_TOKEN` is preferred; `MINERU_API_KEY` remains a compatibility alias. Without it, ScholarAIO can still fall back to Docling / PyMuPDF, or ingest manually placed `.md` files. MinerU token application is currently free
-- **Semantic Scholar API key**: optional; useful when the user needs higher throughput for citation refresh / refetch workflows
+- **Semantic Scholar API key**: optional; useful when the user needs higher throughput for citation refresh, references backfill, and other refetch workflows
 - **Zotero API key**: optional; only needed for the Zotero Web API import path (local `zotero.sqlite` import does not require it)
 - The embedding model (Qwen3-Embedding-0.6B, ~1.2GB) downloads automatically on the first `embed` / `vsearch`. For overseas users, change `embed.source` to `huggingface` in `config.yaml`
 

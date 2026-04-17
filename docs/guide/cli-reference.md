@@ -36,6 +36,8 @@ scholaraio top-cited
 ```text
 scholaraio pipeline [preset]
 scholaraio ingest-link <url> [<url> ...]
+scholaraio websearch <query> [--count N]
+scholaraio webextract <url> [--pdf] [--full] [--max-chars N]
 scholaraio enrich-toc
 scholaraio enrich-l3
 scholaraio backfill-abstract
@@ -46,6 +48,10 @@ scholaraio attach-pdf
 
 - `pipeline` is the main composable ingest entrypoint.
 - `ingest-link` pulls one or more rendered web URLs or online PDFs through an external `qt-web-extractor` service and routes them into the existing document ingest flow.
+- `websearch` performs live web search through an external `GUILessBingSearch` service.
+- `webextract` extracts rendered web content through `qt-web-extractor`; by default it prints a preview, and `--full` expands to the full body.
+- `refetch` refreshes citation counts, bibliographic metadata, and structured `references` for already ingested papers.
+- `refetch --references-only` / `--refs-only` limits the run to DOI papers whose `references` field is still empty; in single-paper mode it only updates `references`.
 - Current preset values are `full`, `ingest`, `enrich`, and `reindex`.
 - Run `scholaraio pipeline --help` for pipeline options such as `--steps`, `--dry-run`, `--no-api`, and `--rebuild`.
 
@@ -83,6 +89,7 @@ scholaraio toolref
 scholaraio arxiv
 scholaraio document
 scholaraio style
+scholaraio backup
 ```
 
 - `toolref` provides versioned scientific tool documentation lookup.
@@ -90,6 +97,10 @@ scholaraio style
 - `arxiv` supports arXiv search and PDF fetch.
 - `document` provides Office-document utilities such as inspection.
 - `style` manages citation styles.
+- `backup` lists configured rsync targets and runs a named backup plan.
+- `backup run` is intentionally non-interactive: SSH is launched with `BatchMode=yes`, so key-based auth and host trust must already be prepared.
+- If a target stores `password` in `config.local.yaml`, ScholarAIO switches to an internal non-interactive askpass path instead of waiting for a terminal prompt.
+- A good first-run sequence is `ssh-keyscan ... >> ~/.ssh/known_hosts`, then `ssh -i <key> -p <port> <user>@<host> true`, then `scholaraio backup run <target> --dry-run`.
 
 ## Audit, Setup, And Runtime Inspection
 
@@ -104,6 +115,8 @@ scholaraio proceedings
 scholaraio citation-check
 ```
 
+- `audit` checks missing metadata, duplicate DOIs, filename issues, and title/content mismatches.
+- `audit` uses paper-type-aware skips so documents, patents, dissertations, and similar front matter do not create spurious `title_mismatch` warnings.
 - `setup` is the environment check and setup wizard entrypoint.
 - `insights` analyzes research behavior such as hot keywords and reading trends.
 - `metrics` shows LLM token and runtime usage.

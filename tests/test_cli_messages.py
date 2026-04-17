@@ -8,6 +8,8 @@ from argparse import Namespace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from scholaraio import cli
 from scholaraio.index import build_index
 from scholaraio.ingest.mineru import ConvertResult, PDFValidationResult
@@ -102,6 +104,120 @@ class TestCliHelpLocalization:
 
         assert "目录名 / UUID / DOI" in refetch_help
 
+    def test_backup_help_exposes_list_and_run_subcommands(self):
+        parser = cli._build_parser()
+        backup_parser = parser._subparsers._group_actions[0].choices["backup"]
+        backup_help = backup_parser.format_help()
+        run_help = backup_parser._subparsers._group_actions[0].choices["run"].format_help()
+
+        assert "rsync 增量备份" in backup_help
+        assert "列出已配置的备份目标" in backup_help
+        assert "预演模式" in run_help
+
+
+class TestWebsearchCli:
+    def test_cmd_websearch_exits_on_service_unavailable(self, monkeypatch):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        def fake_search_and_display(*args, **kwargs):
+            raise webtools.ServiceUnavailableError("service down")
+
+        monkeypatch.setattr(webtools, "search_and_display", fake_search_and_display)
+
+        args = Namespace(query=["test"], count=3)
+
+        with pytest.raises(SystemExit) as exc:
+            cli.cmd_websearch(args, SimpleNamespace())
+
+        assert exc.value.code == 1
+        assert any("错误: service down" in message for message in messages)
+        assert any("GUILessBingSearch" in message for message in messages)
+
+    def test_cmd_websearch_does_not_repeat_success_summary(self, monkeypatch):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        monkeypatch.setattr(
+            webtools,
+            "search_and_display",
+            lambda *args, **kwargs: [
+                webtools.WebSearchResult(title="OpenAI", link="https://openai.com", snippet="AI research")
+            ],
+        )
+
+        args = Namespace(query=["openai"], count=1)
+        cli.cmd_websearch(args, SimpleNamespace())
+
+        assert messages == []
+
+
+class TestWebextractCli:
+    def test_cmd_webextract_exits_when_result_contains_error_without_text(self, monkeypatch):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            webtools,
+            "extract_web",
+            lambda *args, **kwargs: {"title": "", "text": "", "error": "partial extraction failed"},
+        )
+
+        args = Namespace(url="https://example.com", pdf=False, full=False, max_chars=10)
+
+        with pytest.raises(SystemExit) as exc:
+            cli.cmd_webextract(args, SimpleNamespace())
+
+        assert exc.value.code == 1
+        assert any("提取失败: partial extraction failed" in message for message in messages)
+        assert all("提取成功" not in message for message in messages)
+
+    def test_cmd_webextract_truncates_long_text_by_default(self, monkeypatch, capsys):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            webtools,
+            "extract_web",
+            lambda *args, **kwargs: {"title": "Page", "text": "abcdefghijklmnopqrstuvwxyz"},
+        )
+
+        args = Namespace(url="https://example.com", pdf=False, full=False, max_chars=10)
+        cli.cmd_webextract(args, SimpleNamespace())
+
+        captured = capsys.readouterr()
+
+        assert any("提取成功: Page" in message for message in messages)
+        assert any("已截断" in message for message in messages)
+        assert "abcdefghij" in captured.out
+        assert "klmnopqrstuvwxyz" not in captured.out
+
+    def test_cmd_webextract_full_prints_complete_text(self, monkeypatch, capsys):
+        import scholaraio.sources.webtools as webtools
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            webtools,
+            "extract_web",
+            lambda *args, **kwargs: {"title": "Page", "text": "abcdefghijklmnopqrstuvwxyz"},
+        )
+
+        args = Namespace(url="https://example.com", pdf=False, full=True, max_chars=10)
+        cli.cmd_webextract(args, SimpleNamespace())
+
+        captured = capsys.readouterr()
+
+        assert any("提取成功: Page" in message for message in messages)
+        assert all("已截断" not in message for message in messages)
+        assert "abcdefghijklmnopqrstuvwxyz" in captured.out
+
 
 class TestShowLayer4Headings:
     def test_translated_full_text_heading_uses_consistent_spacing(self, tmp_papers, monkeypatch):
@@ -164,6 +280,322 @@ class TestRefetchIdentifierResolution:
         assert seen == [tmp_papers / "Smith-2023-Turbulence" / "meta.json"]
         assert any("并发 refetch（1 workers，共 1 篇）" in m for m in messages)
         assert any("Smith-2023-Turbulence" in m for m in messages)
+
+    def test_refetch_all_references_only_targets_doi_papers_with_empty_references(
+        self, tmp_papers, tmp_path, monkeypatch
+    ):
+        seeded = tmp_papers / "Doe-2022-Seeded-References"
+        seeded.mkdir()
+        (seeded / "meta.json").write_text(
+            json.dumps(
+                {
+                    "id": "cccc-3333",
+                    "title": "Seeded references paper",
+                    "authors": ["Jane Doe"],
+                    "first_author_lastname": "Doe",
+                    "year": 2022,
+                    "journal": "Physics of Fluids",
+                    "doi": "10.9999/pof.2022.001",
+                    "abstract": "Has references already.",
+                    "paper_type": "journal-article",
+                    "citation_count": {"crossref": 1},
+                    "references": ["10.9999/ref-1"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (seeded / "paper.md").write_text("# Seeded references paper\n\nBody.", encoding="utf-8")
+
+        seen: list[tuple[Path, bool]] = []
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.ingest.metadata.refetch_metadata",
+            lambda jp, references_only=False: seen.append((jp, references_only)) or True,
+        )
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_path / "missing-index.db")
+        args = Namespace(
+            paper_id=None,
+            all=True,
+            force=False,
+            jobs=5,
+            references_only=True,
+        )
+
+        cli.cmd_refetch(args, cfg)
+
+        assert seen == [(tmp_papers / "Smith-2023-Turbulence" / "meta.json", True)]
+        assert any("1 篇需要补全 references" in m for m in messages)
+        assert any("并发 refetch（1 workers，共 1 篇）" in m for m in messages)
+
+
+class TestRepairIdentifierResolution:
+    def test_repair_help_accepts_uuid_and_doi_identifiers(self):
+        parser = cli._build_parser()
+        repair_help = parser._subparsers._group_actions[0].choices["repair"].format_help()
+
+        assert "目录名 / UUID / DOI" in repair_help
+
+    def test_repair_resolves_uuid_via_registry(self, tmp_papers, tmp_db):
+        build_index(tmp_papers, tmp_db)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(
+            paper_id="aaaa-1111",
+            title="Updated Turbulence Title",
+            doi="",
+            author="John Smith",
+            year=2023,
+            no_api=True,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Updated-Turbulence-Title"
+        assert repaired_dir.exists()
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+        assert repaired_meta["id"] == "aaaa-1111"
+        assert repaired_meta["title"] == "Updated Turbulence Title"
+
+    def test_repair_preserves_registry_uuid_when_meta_json_lost_id(self, tmp_papers, tmp_db):
+        build_index(tmp_papers, tmp_db)
+
+        paper_dir = tmp_papers / "Smith-2023-Turbulence"
+        meta_path = paper_dir / "meta.json"
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        data.pop("id", None)
+        meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(
+            paper_id="10.1234/jfm.2023.001",
+            title="Recovered Turbulence Title",
+            doi="10.1234/jfm.2023.001",
+            author="John Smith",
+            year=2023,
+            no_api=True,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Recovered-Turbulence-Title"
+        assert repaired_dir.exists()
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+        assert repaired_meta["id"] == "aaaa-1111"
+
+    def test_repair_preserves_registry_uuid_when_registry_dir_name_is_stale(self, tmp_papers, tmp_db):
+        build_index(tmp_papers, tmp_db)
+
+        original_dir = tmp_papers / "Smith-2023-Turbulence"
+        renamed_dir = tmp_papers / "Smith-2023-Turbulence-Renamed"
+        original_dir.rename(renamed_dir)
+
+        meta_path = renamed_dir / "meta.json"
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        data.pop("id", None)
+        meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(
+            paper_id="10.1234/jfm.2023.001",
+            title="Recovered Turbulence Title",
+            doi="10.1234/jfm.2023.001",
+            author="John Smith",
+            year=2023,
+            no_api=True,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Recovered-Turbulence-Title"
+        assert repaired_dir.exists()
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+        assert repaired_meta["id"] == "aaaa-1111"
+
+    def test_repair_recovers_registry_uuid_by_existing_doi_when_called_by_dir_name(self, tmp_papers, tmp_db):
+        build_index(tmp_papers, tmp_db)
+
+        original_dir = tmp_papers / "Smith-2023-Turbulence"
+        renamed_dir = tmp_papers / "Smith-2023-Turbulence-Renamed"
+        original_dir.rename(renamed_dir)
+
+        meta_path = renamed_dir / "meta.json"
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        data.pop("id", None)
+        meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(
+            paper_id=renamed_dir.name,
+            title="Recovered Turbulence Title",
+            doi="",
+            author="John Smith",
+            year=2023,
+            no_api=True,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Recovered-Turbulence-Title"
+        assert repaired_dir.exists()
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+        assert repaired_meta["id"] == "aaaa-1111"
+
+    def test_repair_replaces_bogus_meta_uuid_when_registry_has_stable_doi_match(self, tmp_papers, tmp_db):
+        build_index(tmp_papers, tmp_db)
+
+        paper_dir = tmp_papers / "Smith-2023-Turbulence"
+        meta_path = paper_dir / "meta.json"
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        data["id"] = "bogus-9999"
+        meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(
+            paper_id="10.1234/jfm.2023.001",
+            title="Recovered Turbulence Title",
+            doi="",
+            author="John Smith",
+            year=2023,
+            no_api=True,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Recovered-Turbulence-Title"
+        assert repaired_dir.exists()
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+        assert repaired_meta["id"] == "aaaa-1111"
+
+    def test_repair_preserves_existing_metadata_when_no_api(self, tmp_papers, tmp_db):
+        build_index(tmp_papers, tmp_db)
+
+        paper_dir = tmp_papers / "Smith-2023-Turbulence"
+        meta_path = paper_dir / "meta.json"
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        data.update(
+            {
+                "first_author": "John Smith",
+                "citation_count": {
+                    "crossref": 10,
+                    "semantic_scholar": 12,
+                    "openalex": 8,
+                },
+                "ids": {
+                    "doi": "10.1234/jfm.2023.001",
+                    "doi_url": "https://doi.org/10.1234/jfm.2023.001",
+                    "semantic_scholar": "s2-123",
+                    "semantic_scholar_url": "https://www.semanticscholar.org/paper/s2-123",
+                    "openalex": "https://openalex.org/W123",
+                    "openalex_url": "https://openalex.org/works/W123",
+                },
+                "api_sources": ["crossref", "semantic_scholar", "openalex"],
+                "references": ["10.9999/ref1"],
+                "toc": [{"level": 1, "title": "Introduction"}],
+                "l3_conclusion": "A careful conclusion.",
+            }
+        )
+        meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(
+            paper_id="Smith-2023-Turbulence",
+            title="Recovered Turbulence Title",
+            doi="",
+            author="John Smith",
+            year=2023,
+            no_api=True,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Recovered-Turbulence-Title"
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+
+        assert repaired_meta["id"] == "aaaa-1111"
+        assert repaired_meta["doi"] == "10.1234/jfm.2023.001"
+        assert repaired_meta["journal"] == "Journal of Fluid Mechanics"
+        assert repaired_meta["abstract"] == "We propose a novel turbulence model for boundary layers."
+        assert repaired_meta["paper_type"] == "journal-article"
+        assert repaired_meta["citation_count"] == data["citation_count"]
+        assert repaired_meta["ids"] == data["ids"]
+        assert repaired_meta["api_sources"] == data["api_sources"]
+        assert repaired_meta["references"] == data["references"]
+        assert repaired_meta["toc"] == data["toc"]
+        assert repaired_meta["l3_conclusion"] == data["l3_conclusion"]
+
+    def test_repair_accepts_direct_dir_when_meta_json_is_missing(self, tmp_papers, tmp_path):
+        paper_dir = tmp_papers / "Broken-2023-Turbulence"
+        paper_dir.mkdir()
+        (paper_dir / "paper.md").write_text("# Broken metadata\n\nFull text here.", encoding="utf-8")
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_path / "missing-index.db")
+        args = Namespace(
+            paper_id="Broken-2023-Turbulence",
+            title="Recovered Turbulence Title",
+            doi="",
+            author="John Smith",
+            year=2023,
+            no_api=True,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Recovered-Turbulence-Title"
+        assert repaired_dir.exists()
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+        assert repaired_meta["id"]
+        assert repaired_meta["title"] == "Recovered Turbulence Title"
+        assert (repaired_dir / "paper.md").exists()
+
+
+class TestShowIdentifierDisplay:
+    def test_show_prefers_registry_uuid_when_meta_json_lost_id(self, tmp_papers, tmp_db, monkeypatch):
+        build_index(tmp_papers, tmp_db)
+
+        paper_dir = tmp_papers / "Smith-2023-Turbulence"
+        meta_path = paper_dir / "meta.json"
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        data.pop("id", None)
+        meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(paper_id="10.1234/jfm.2023.001", layer=1)
+
+        cli.cmd_show(args, cfg)
+
+        assert "论文ID   : aaaa-1111" in messages
+
+    def test_show_replaces_bogus_meta_uuid_with_registry_uuid(self, tmp_papers, tmp_db, monkeypatch):
+        build_index(tmp_papers, tmp_db)
+
+        paper_dir = tmp_papers / "Smith-2023-Turbulence"
+        meta_path = paper_dir / "meta.json"
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        data["id"] = "bogus-9999"
+        meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        messages: list[str] = []
+        monkeypatch.setattr(cli, "ui", messages.append)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(paper_id="10.1234/jfm.2023.001", layer=1)
+
+        cli.cmd_show(args, cfg)
+
+        assert "论文ID   : aaaa-1111" in messages
+        assert "论文ID   : bogus-9999" not in messages
 
 
 class TestShowNotesIntegration:
