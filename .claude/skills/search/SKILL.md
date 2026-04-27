@@ -23,6 +23,12 @@ description: Use when the user wants to find academic papers, search the local l
    - **期刊过滤**：`--journal "Fluid Mechanics"`（模糊匹配）
    - **类型过滤**：`--type review`（模糊匹配，常见值：`review`、`journal-article`、`book-chapter`）
 
+   **查询词拆分原则**：不要把“作者 + 年份 + 关键词/题名词”全部拼进同一个 query。主库关键词检索会把整串文本交给 FTS5 `MATCH`，作者缩写、全名、标点或年份 token 只要和索引不一致，就可能让原本可命中的论文搜不出来。
+   - 年份必须优先放到 `--year`，不要放进 query。
+   - 明确按作者找时用 `search-author "<作者姓或姓名>"`，不要把作者混进主题 query。
+   - 已知题名或主题时，query 保持为最稳定的题名/主题关键词；需要作者/年份约束时分步过滤或二次确认。
+   - 如果第一次无结果，先去掉作者缩写、年份、机构、期刊等限定词，只保留题名核心词或主题词再搜。
+
 3. 执行搜索命令：
 
 **融合检索（默认）：**
@@ -99,6 +105,9 @@ ids, toc, l3_conclusion
 
 用户说："2020年以后关于 drag reduction 的论文"
 → 执行 `usearch "drag reduction" --year 2020-`
+
+用户说："找 Moin 1982 numerical investigation turbulent channel flow"
+→ 执行 `usearch "numerical investigation turbulent channel flow" --year 1982`；必要时再用 `search-author "Moin" --year 1982` 交叉确认，不要执行 `search "P Moin 1982 numerical investigation turbulent channel flow"`
 
 用户说："JFM 上发的湍流论文"
 → 执行 `usearch "turbulence" --journal "Fluid Mechanics"`
