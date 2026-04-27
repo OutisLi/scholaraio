@@ -23,7 +23,10 @@ description: Use when the user wants to find academic papers, search the local l
    - **期刊过滤**：`--journal "Fluid Mechanics"`（模糊匹配）
    - **类型过滤**：`--type review`（模糊匹配，常见值：`review`、`journal-article`、`book-chapter`）
 
-   **查询词拆分原则**：不要把“作者 + 年份 + 关键词/题名词”全部拼进同一个 query。主库关键词检索会把整串文本交给 FTS5 `MATCH`，作者缩写、全名、标点或年份 token 只要和索引不一致，就可能让原本可命中的论文搜不出来。
+   **查询词拆分原则**：不要把“作者 + 年份 + 关键词/题名词”全部拼进同一个 query。这条规则同时适用于 `search`、`vsearch` 和 `usearch`：
+   - `search` 会把整串文本交给 FTS5 `MATCH`；作者缩写、全名、标点或年份 token 只要和索引不一致，就可能让原本可命中的论文搜不出来。
+   - `vsearch` 通常不会因此空结果，但作者/年份/期刊等限定词会作为噪声进入 query embedding，可能拉低相关论文分数或引入相近但不精确的结果。
+   - `usearch` 同时跑 FTS 和向量；脏 query 可能让 FTS leg 失效，只剩语义命中，结果不再获得 `both` 加分。
    - 年份必须优先放到 `--year`，不要放进 query。
    - 明确按作者找时用 `search-author "<作者姓或姓名>"`，不要把作者混进主题 query。
    - 已知题名或主题时，query 保持为最稳定的题名/主题关键词；需要作者/年份约束时分步过滤或二次确认。
